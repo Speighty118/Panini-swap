@@ -55,6 +55,16 @@ router.post('/', async (req, res) => {
   try {
     await client.query('BEGIN');
 
+    const { rows: userRows } = await client.query('SELECT email_verified, is_suspended FROM users WHERE id = $1', [userId]);
+    if (userRows[0]?.is_suspended) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ error: 'Your account has been suspended. Contact the group admin for details.' });
+    }
+    if (!userRows[0]?.email_verified) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ error: 'Please verify your email before starting a swap. Check your inbox or request a new link from your profile.' });
+    }
+
     const { rows: matchRows } = await client.query(
       `SELECT * FROM matches WHERE id = $1 AND status = 'pending'`,
       [matchId]
