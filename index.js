@@ -28,12 +28,21 @@ const app = express();
 // ---- Security & parsing middleware ----
 app.use(helmet());
 app.use(express.json({ limit: '1mb' }));
-app.use(
-  cors({
-    origin: process.env.CORS_ORIGIN || '*',
-    credentials: true,
-  })
-);
+// CORS is applied per-path rather than globally, so each request is
+// handled by exactly one CORS configuration with no ordering ambiguity.
+//
+// Admin routes (admin.html, opened locally or hosted separately) allow
+// any origin — safe, since every /api/admin route is independently
+// gated by the ADMIN_SECRET check in api/admin.js regardless of origin.
+// Everything else is restricted to CORS_ORIGIN, same as before.
+const restrictedCors = cors({ origin: process.env.CORS_ORIGIN || '*', credentials: true });
+const adminCors = cors({ origin: '*' });
+
+app.use('/api/admin', adminCors);
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api/admin')) return next();
+  restrictedCors(req, res, next);
+});
 
 // Basic rate limiting — protects login/signup from brute force,
 // and protects the whole API from abuse. Tune as the group grows.
