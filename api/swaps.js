@@ -1,0 +1,349 @@
+/**
+ * Swap API endpoints.
+ *
+ * Mount under /api/swaps in your main Express app:
+ *   app.use('/api/swaps', require('./api/swaps'));
+ *
+ * Auth middleware (req.user) is assumed to run before these routes
+ * and populate req.user.id with the authenticated user's id.
+ */
+
+const express = require('express');
+const router = express.Router();
+const { Pool } = require('pg');
+const { requireAuth } = require('./middleware/auth');
+
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+
+router.use(requireAuth);
+
+// ----------------------------------------------------------------
+// GET /api/swaps/matches
+// List this user's pending match candidates (not yet a swap).
+// ----------------------------------------------------------------
+router.get('/matches', async (req, res) => {
+  const userId = req.user.id;
+  try {
+    const { rows } = await pool.query(
+      `SELECT m.*, 
+              u.name AS other_user_name, u.rating_avg, u.rating_count
+       FROM matches m
+       JOIN users u ON u.id = CASE WHEN m.user_a_id = $1 THEN m.user_b_id ELSE m.user_a_id END
+       WHERE (m.user_a_id = $1 OR m.user_b_id = $1)
+         AND m.status = 'pending'
+       ORDER BY m.computed_at DESC`,
+      [userId]
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch matches' });
+  }
+});
+
+// ----------------------------------------------------------------
+// POST /api/swaps
+// Create a swap proposal from a match. Body: { matchId }
+// Pulls the actual sticker list via get_swap_proposal() and
+// inserts swap + swap_items rows.
+// ----------------------------------------------------------------
+router.post('/', async (req, res) => {
+  const userId = req.user.id;
+  const { matchId } = req.body;
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const { rows: matchRows } = await client.query(
+      `SELECT * FROM matches WHERE id = $1 AND status = 'pending'`,
+      [matchId]
+    );
+    const match = matchRows[0];
+    if (!match) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Match not found or already actioned' });
+    }
+    if (match.user_a_id !== userId && match.user_b_id !== userId) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ error: 'Not your match' });
+    }
+
+    const { rows: swapRows } = await client.query(
+      `INSERT INTO swaps (user_a_id, user_b_id, status)
+       VALUES ($1, $2, 'proposed')
+       RETURNING *`,
+      [match.user_a_id, match.user_b_id]
+    );
+    const swap = swapRows[0];
+
+    const { rows: items } = await client.query(
+      `SELECT * FROM get_swap_proposal($1, $2, 5)`,
+      [match.user_a_id, match.user_b_id]
+    );
+
+    for (const item of items) {
+      await client.query(
+        `INSERT INTO swap_items (swap_id, sticker_id, from_user_id, to_user_id)
+         VALUES ($1, $2, $3, $4)`,
+        [swap.id, item.sticker_id, item.from_user_id, item.to_user_id]
+      );
+    }
+
+    await client.query(
+      `UPDATE matches SET status = 'proposed' WHERE id = $1`,
+      [matchId]
+    );
+
+    await client.query('COMMIT');
+    res.status(201).json({ swap, items });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error(err);
+    res.status(500).json({ error: 'Failed to create swap' });
+  } finally {
+    client.release();
+  }
+});
+
+// ----------------------------------------------------------------
+// GET /api/swaps/:id
+// Full swap detail including items. Addresses only included
+// if status is 'accepted' or later AND requester is a participant.
+// ----------------------------------------------------------------
+router.get('/:id', async (req, res) => {
+  const userId = req.user.id;
+  const swapId = req.params.id;
+
+  try {
+    const { rows: swapRows } = await pool.query(
+      `SELECT * FROM swaps WHERE id = $1`,
+      [swapId]
+    );
+    const swap = swapRows[0];
+    if (!swap) return res.status(404).json({ error: 'Swap not found' });
+    if (swap.user_a_id !== userId && swap.user_b_id !== userId) {
+      return res.status(403).json({ error: 'Not your swap' });
+    }
+
+    const { rows: items } = await pool.query(
+      `SELECT si.*, s.sticker_number, s.description, s.team_name
+       FROM swap_items si
+       JOIN stickers s ON s.id = si.sticker_id
+       WHERE si.swap_id = $1`,
+      [swapId]
+    );
+
+    const bothAccepted = swap.user_a_accepted && swap.user_b_accepted;
+    let addresses = null;
+
+    if (bothAccepted) {
+      const otherUserId = swap.user_a_id === userId ? swap.user_b_id : swap.user_a_id;
+      const { rows: addrRows } = await pool.query(
+        `SELECT name, address_line1, address_line2, city, postcode, country
+         FROM users WHERE id = $1`,
+        [otherUserId]
+      );
+      addresses = addrRows[0];
+    }
+
+    res.json({ swap, items, otherUserAddress: addresses });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch swap' });
+  }
+});
+
+// ----------------------------------------------------------------
+// POST /api/swaps/:id/accept
+// Mark this user's side as accepted. If both sides have now
+// accepted, flip swap status to 'accepted' (unlocks addresses).
+// ----------------------------------------------------------------
+router.post('/:id/accept', async (req, res) => {
+  const userId = req.user.id;
+  const swapId = req.params.id;
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const { rows } = await client.query(`SELECT * FROM swaps WHERE id = $1`, [swapId]);
+    const swap = rows[0];
+    if (!swap) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Swap not found' });
+    }
+    if (swap.user_a_id !== userId && swap.user_b_id !== userId) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ error: 'Not your swap' });
+    }
+
+    const isUserA = swap.user_a_id === userId;
+    const field = isUserA ? 'user_a_accepted' : 'user_b_accepted';
+
+    await client.query(
+      `UPDATE swaps SET ${field} = TRUE, updated_at = NOW() WHERE id = $1`,
+      [swapId]
+    );
+
+    const { rows: updatedRows } = await client.query(`SELECT * FROM swaps WHERE id = $1`, [swapId]);
+    const updated = updatedRows[0];
+
+    if (updated.user_a_accepted && updated.user_b_accepted && updated.status === 'proposed') {
+      await client.query(
+        `UPDATE swaps SET status = 'accepted', updated_at = NOW() WHERE id = $1`,
+        [swapId]
+      );
+    }
+
+    await client.query('COMMIT');
+    res.json({ success: true });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error(err);
+    res.status(500).json({ error: 'Failed to accept swap' });
+  } finally {
+    client.release();
+  }
+});
+
+// ----------------------------------------------------------------
+// POST /api/swaps/:id/decline
+// Either side can decline while still in 'proposed' state.
+// ----------------------------------------------------------------
+router.post('/:id/decline', async (req, res) => {
+  const userId = req.user.id;
+  const swapId = req.params.id;
+
+  try {
+    const { rows } = await pool.query(`SELECT * FROM swaps WHERE id = $1`, [swapId]);
+    const swap = rows[0];
+    if (!swap) return res.status(404).json({ error: 'Swap not found' });
+    if (swap.user_a_id !== userId && swap.user_b_id !== userId) {
+      return res.status(403).json({ error: 'Not your swap' });
+    }
+    if (swap.status !== 'proposed') {
+      return res.status(400).json({ error: 'Swap already past the proposal stage' });
+    }
+
+    await pool.query(
+      `UPDATE swaps SET status = 'declined', updated_at = NOW() WHERE id = $1`,
+      [swapId]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to decline swap' });
+  }
+});
+
+// ----------------------------------------------------------------
+// POST /api/swaps/:id/posted
+// Mark this user's side as having posted their stickers.
+// ----------------------------------------------------------------
+router.post('/:id/posted', async (req, res) => {
+  const userId = req.user.id;
+  const swapId = req.params.id;
+
+  try {
+    const { rows } = await pool.query(`SELECT * FROM swaps WHERE id = $1`, [swapId]);
+    const swap = rows[0];
+    if (!swap) return res.status(404).json({ error: 'Swap not found' });
+    if (swap.user_a_id !== userId && swap.user_b_id !== userId) {
+      return res.status(403).json({ error: 'Not your swap' });
+    }
+    if (swap.status !== 'accepted') {
+      return res.status(400).json({ error: 'Swap must be accepted before posting' });
+    }
+
+    const isUserA = swap.user_a_id === userId;
+    const field = isUserA ? 'user_a_posted' : 'user_b_posted';
+
+    await pool.query(
+      `UPDATE swaps SET ${field} = TRUE, updated_at = NOW() WHERE id = $1`,
+      [swapId]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to update posted status' });
+  }
+});
+
+// ----------------------------------------------------------------
+// POST /api/swaps/:id/received
+// Mark this user's side as having received the other's stickers.
+// If both sides confirm, swap moves to 'completed' and removes
+// the swapped stickers from each user's duplicates/needs lists.
+// ----------------------------------------------------------------
+router.post('/:id/received', async (req, res) => {
+  const userId = req.user.id;
+  const swapId = req.params.id;
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const { rows } = await client.query(`SELECT * FROM swaps WHERE id = $1`, [swapId]);
+    const swap = rows[0];
+    if (!swap) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Swap not found' });
+    }
+    if (swap.user_a_id !== userId && swap.user_b_id !== userId) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ error: 'Not your swap' });
+    }
+
+    const isUserA = swap.user_a_id === userId;
+    const field = isUserA ? 'user_a_received' : 'user_b_received';
+
+    await client.query(
+      `UPDATE swaps SET ${field} = TRUE, updated_at = NOW() WHERE id = $1`,
+      [swapId]
+    );
+
+    const { rows: updatedRows } = await client.query(`SELECT * FROM swaps WHERE id = $1`, [swapId]);
+    const updated = updatedRows[0];
+
+    if (updated.user_a_received && updated.user_b_received) {
+      await client.query(
+        `UPDATE swaps SET status = 'completed', updated_at = NOW() WHERE id = $1`,
+        [swapId]
+      );
+
+      // Adjust inventories: decrement duplicates sent, remove needs fulfilled
+      const { rows: items } = await client.query(
+        `SELECT * FROM swap_items WHERE swap_id = $1`,
+        [swapId]
+      );
+
+      for (const item of items) {
+        await client.query(
+          `UPDATE user_duplicates SET quantity = quantity - 1
+           WHERE user_id = $1 AND sticker_id = $2`,
+          [item.from_user_id, item.sticker_id]
+        );
+        await client.query(
+          `DELETE FROM user_duplicates WHERE user_id = $1 AND sticker_id = $2 AND quantity <= 0`,
+          [item.from_user_id, item.sticker_id]
+        );
+        await client.query(
+          `DELETE FROM user_needs WHERE user_id = $1 AND sticker_id = $2`,
+          [item.to_user_id, item.sticker_id]
+        );
+      }
+    }
+
+    await client.query('COMMIT');
+    res.json({ success: true, completed: updated.user_a_received && updated.user_b_received });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error(err);
+    res.status(500).json({ error: 'Failed to update received status' });
+  } finally {
+    client.release();
+  }
+});
+
+module.exports = router;
