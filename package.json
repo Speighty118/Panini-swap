@@ -15,6 +15,7 @@
     "cors": "^2.8.5",
     "helmet": "^7.1.0",
     "express-rate-limit": "^7.2.0",
-    "dotenv": "^16.4.5"
+    "dotenv": "^16.4.5",
+    "resend": "^4.0.0"
   }
 }
