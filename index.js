@@ -19,6 +19,7 @@ const authRoutes = require('./api/auth');
 const stickerRoutes = require('./api/stickers');
 const swapRoutes = require('./api/swaps');
 const ratingRoutes = require('./api/ratings');
+const disputeRoutes = require('./api/disputes');
 const { runMatchingJob } = require('./jobs/run_matching');
 
 const app = express();
@@ -56,6 +57,7 @@ app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/stickers', stickerRoutes);
 app.use('/api/swaps', swapRoutes);
 app.use('/api/ratings', ratingRoutes);
+app.use('/api/disputes', disputeRoutes);
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 
