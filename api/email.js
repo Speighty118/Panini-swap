@@ -20,10 +20,10 @@ async function sendVerificationEmail(toEmail, name, verifyUrl) {
   return resend.emails.send({
     from: FROM_EMAIL,
     to: toEmail,
-    subject: 'Verify your SwapShelf account',
+    subject: 'Verify your Got One Spare? account',
     html: `
       <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
-        <h2 style="color: #0B3D2E;">Welcome to SwapShelf, ${name}!</h2>
+        <h2 style="color: #0B3D2E;">Welcome to Got One Spare?, ${name}!</h2>
         <p>Please confirm your email address to start swapping stickers.</p>
         <p>
           <a href="${verifyUrl}" style="background: #0B3D2E; color: #FAF6EC; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block;">
