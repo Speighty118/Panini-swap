@@ -19,6 +19,7 @@ const authRoutes = require('./api/auth');
 const stickerRoutes = require('./api/stickers');
 const swapRoutes = require('./api/swaps');
 const ratingRoutes = require('./api/ratings');
+const { runMatchingJob } = require('./jobs/run_matching');
 
 const app = express();
 
@@ -57,6 +58,25 @@ app.use('/api/swaps', swapRoutes);
 app.use('/api/ratings', ratingRoutes);
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
+
+// ---- Internal: trigger the matching batch job ----
+// Called by Railway's HTTP cron on a schedule. Protected by a shared
+// secret passed as a query param, since Railway's simple HTTP cron
+// tool only supports a plain URL (no custom headers).
+app.all('/api/internal/run-matching', async (req, res) => {
+  const providedSecret = req.query.secret;
+  if (!process.env.CRON_SECRET || providedSecret !== process.env.CRON_SECRET) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  try {
+    await runMatchingJob();
+    res.json({ success: true, ranAt: new Date().toISOString() });
+  } catch (err) {
+    console.error('Cron-triggered matching job failed:', err);
+    res.status(500).json({ error: 'Matching job failed' });
+  }
+});
 
 // ---- 404 ----
 app.use((req, res) => {
