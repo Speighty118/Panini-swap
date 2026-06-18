@@ -221,7 +221,19 @@ router.get('/me', requireAuth, async (req, res) => {
 // handle those separately with re-verification if you add them.
 // ----------------------------------------------------------------
 router.put('/me', requireAuth, async (req, res) => {
-  const { name, address_line1, address_line2, city, postcode, country } = req.body;
+  const { name, address_line1, address_line2, city, postcode, country, profile_photo } = req.body;
+
+  // profile_photo arrives as a base64 data URL (e.g. "data:image/jpeg;base64,...").
+  // Cap at ~700KB of base64 text, which corresponds to roughly 500KB of
+  // actual image data — plenty for a small profile photo, small enough
+  // to keep the database and API responses fast.
+  const MAX_PHOTO_LENGTH = 700_000;
+  if (profile_photo && profile_photo.length > MAX_PHOTO_LENGTH) {
+    return res.status(400).json({ error: 'Photo is too large. Please use a smaller image (under ~500KB).' });
+  }
+  if (profile_photo && !profile_photo.startsWith('data:image/')) {
+    return res.status(400).json({ error: 'Invalid photo format.' });
+  }
 
   try {
     const { rows } = await pool.query(
@@ -231,10 +243,11 @@ router.put('/me', requireAuth, async (req, res) => {
            address_line2 = COALESCE($3, address_line2),
            city = COALESCE($4, city),
            postcode = COALESCE($5, postcode),
-           country = COALESCE($6, country)
-       WHERE id = $7
+           country = COALESCE($6, country),
+           profile_photo = COALESCE($7, profile_photo)
+       WHERE id = $8
        RETURNING *`,
-      [name, address_line1, address_line2, city, postcode, country, req.user.id]
+      [name, address_line1, address_line2, city, postcode, country, profile_photo, req.user.id]
     );
     res.json(publicUser(rows[0]));
   } catch (err) {
