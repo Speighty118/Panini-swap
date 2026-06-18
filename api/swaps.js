@@ -204,6 +204,30 @@ router.post('/:id/accept', async (req, res) => {
         `UPDATE swaps SET status = 'accepted', updated_at = NOW() WHERE id = $1`,
         [swapId]
       );
+
+      // Once both sides have committed, pull the specific stickers in
+      // this swap out of duplicates/needs so they stop being offered
+      // to (or matched against) anyone else. We only remove what's
+      // actually part of THIS swap, not a person's whole inventory —
+      // someone may have other unrelated duplicates/needs for the
+      // same sticker code from a different context, but practically
+      // each sticker_id only ever has one duplicates/needs row per
+      // user, so this is a precise, scoped cleanup either way.
+      const { rows: items } = await client.query(
+        `SELECT sticker_id, from_user_id, to_user_id FROM swap_items WHERE swap_id = $1`,
+        [swapId]
+      );
+
+      for (const item of items) {
+        await client.query(
+          `DELETE FROM user_duplicates WHERE user_id = $1 AND sticker_id = $2`,
+          [item.from_user_id, item.sticker_id]
+        );
+        await client.query(
+          `DELETE FROM user_needs WHERE user_id = $1 AND sticker_id = $2`,
+          [item.to_user_id, item.sticker_id]
+        );
+      }
     }
 
     await client.query('COMMIT');
