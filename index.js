@@ -34,8 +34,26 @@ app.use(express.json({ limit: '1mb' }));
 // Admin routes (admin.html, opened locally or hosted separately) allow
 // any origin — safe, since every /api/admin route is independently
 // gated by the ADMIN_SECRET check in api/admin.js regardless of origin.
-// Everything else is restricted to CORS_ORIGIN, same as before.
-const restrictedCors = cors({ origin: process.env.CORS_ORIGIN || '*', credentials: true });
+//
+// Everything else is restricted to CORS_ORIGIN, which may be a single
+// origin or a comma-separated list (e.g. both the apex and www version
+// of a custom domain): "https://gotonespare.com,https://www.gotonespare.com"
+const allowedOrigins = (process.env.CORS_ORIGIN || '*')
+  .split(',')
+  .map((o) => o.trim())
+  .filter(Boolean);
+
+const restrictedCors = cors({
+  origin: (origin, callback) => {
+    // requests with no Origin header (server-to-server, curl, etc.)
+    // are allowed through; browser requests always send Origin.
+    if (!origin || allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    callback(new Error('Not allowed by CORS'));
+  },
+  credentials: true,
+});
 const adminCors = cors({ origin: '*' });
 
 app.use('/api/admin', adminCors);
