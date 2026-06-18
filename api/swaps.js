@@ -42,6 +42,31 @@ router.get('/matches', async (req, res) => {
 });
 
 // ----------------------------------------------------------------
+// GET /api/swaps/mine
+// List every swap the logged-in user is part of, any status,
+// most recently updated first — lets someone revisit a past or
+// completed swap once it's no longer on the Matches tab.
+// ----------------------------------------------------------------
+router.get('/mine', async (req, res) => {
+  const userId = req.user.id;
+  try {
+    const { rows } = await pool.query(
+      `SELECT s.*,
+              u.id AS other_user_id, u.name AS other_user_name
+       FROM swaps s
+       JOIN users u ON u.id = CASE WHEN s.user_a_id = $1 THEN s.user_b_id ELSE s.user_a_id END
+       WHERE s.user_a_id = $1 OR s.user_b_id = $1
+       ORDER BY s.updated_at DESC`,
+      [userId]
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch your swaps' });
+  }
+});
+
+// ----------------------------------------------------------------
 // POST /api/swaps
 // Create a swap proposal from a match. Body: { matchId }
 // Pulls the actual sticker list via get_swap_proposal() and
