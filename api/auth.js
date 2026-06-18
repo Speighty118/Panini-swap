@@ -188,6 +188,9 @@ router.post('/login', async (req, res) => {
     if (!user.is_active) {
       return res.status(403).json({ error: 'This account has been deactivated' });
     }
+    if (user.is_suspended) {
+      return res.status(403).json({ error: 'Your account has been suspended. Contact the group admin for details.' });
+    }
 
     const token = signToken(user.id);
     res.json({ token, user: publicUser(user) });
@@ -207,6 +210,12 @@ router.get('/me', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query('SELECT * FROM users WHERE id = $1', [req.user.id]);
     if (!rows[0]) return res.status(404).json({ error: 'User not found' });
+    if (!rows[0].is_active) {
+      return res.status(403).json({ error: 'This account has been deactivated' });
+    }
+    if (rows[0].is_suspended) {
+      return res.status(403).json({ error: 'Your account has been suspended. Contact the group admin for details.' });
+    }
     res.json(publicUser(rows[0]));
   } catch (err) {
     console.error(err);
