@@ -5,8 +5,8 @@
  * rather than computing matches live on each page load.
  *
  * What it does:
- *   1. Calls find_matches(5) — the SQL function that finds user pairs
- *      where each side can give >= 5 stickers the other needs.
+ *   1. Calls find_matches(3) — the SQL function that finds user pairs
+ *      where each side can give >= 3 stickers the other needs.
  *   2. Upserts results into the `matches` table.
  *   3. Marks any previously-pending match that's no longer in the
  *      current result set as 'stale' (e.g. someone's inventory changed
@@ -21,7 +21,7 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
 });
 
-const MIN_MATCH = 5;
+const MIN_MATCH = 3;
 
 async function runMatchingJob() {
   const client = await pool.connect();
