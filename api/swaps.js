@@ -26,7 +26,7 @@ router.get('/matches', async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT m.*, 
-              u.name AS other_user_name, u.rating_avg, u.rating_count
+              u.id AS other_user_id, u.name AS other_user_name, u.rating_avg, u.rating_count
        FROM matches m
        JOIN users u ON u.id = CASE WHEN m.user_a_id = $1 THEN m.user_b_id ELSE m.user_a_id END
        WHERE (m.user_a_id = $1 OR m.user_b_id = $1)
