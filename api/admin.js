@@ -189,6 +189,34 @@ router.get('/overview', async (req, res) => {
 });
 
 // ----------------------------------------------------------------
+// POST /api/admin/broadcast
+// Send a notification to every active user at once.
+// Body: { title, body, type }
+// ----------------------------------------------------------------
+router.post('/broadcast', async (req, res) => {
+  const { title, body, type = 'announcement' } = req.body;
+  if (!title || !title.trim()) {
+    return res.status(400).json({ error: 'title is required' });
+  }
+  try {
+    const { rows: users } = await pool.query(
+      `SELECT id FROM users WHERE is_suspended = FALSE AND is_active = TRUE`
+    );
+    for (const user of users) {
+      await pool.query(
+        `INSERT INTO notifications (user_id, type, title, body)
+         VALUES ($1, $2, $3, $4)`,
+        [user.id, type, title.trim(), body?.trim() || null]
+      );
+    }
+    res.json({ sent: users.length });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to send broadcast' });
+  }
+});
+
+// ----------------------------------------------------------------
 // GET /api/admin/invites-list
 // Lists all invite codes (proxies through admin auth rather than
 // requiring the public invites endpoint).
