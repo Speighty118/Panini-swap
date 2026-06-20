@@ -34,7 +34,7 @@ function publicUser(row) {
 // flagged email_verified = false until the link is clicked.
 // ----------------------------------------------------------------
 router.post('/signup', async (req, res) => {
-  const { name, email, password } = req.body;
+  const { name, email, password, inviteCode } = req.body;
   const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || 'unknown';
 
   if (!name || !email || !password) {
@@ -45,6 +45,20 @@ router.post('/signup', async (req, res) => {
   }
 
   try {
+    // Check invite-only mode
+    if (process.env.INVITE_ONLY === 'true') {
+      if (!inviteCode) {
+        return res.status(403).json({ error: 'An invite code is required to sign up.', inviteRequired: true });
+      }
+      const { rows: codeRows } = await pool.query(
+        `SELECT id FROM invite_codes WHERE code = $1 AND used_at IS NULL`,
+        [inviteCode.trim().toUpperCase()]
+      );
+      if (!codeRows[0]) {
+        return res.status(403).json({ error: 'Invalid or already-used invite code.', inviteRequired: true });
+      }
+    }
+
     // Throttle: how many accounts has this IP created in the last 24h?
     const { rows: recentAttempts } = await pool.query(
       `SELECT COUNT(*) AS cnt FROM signup_attempts
@@ -77,10 +91,17 @@ router.post('/signup', async (req, res) => {
     );
 
     const user = rows[0];
+
+    // Mark invite code as used
+    if (process.env.INVITE_ONLY === 'true' && inviteCode) {
+      await pool.query(
+        `UPDATE invite_codes SET used_by = $1, used_at = NOW() WHERE code = $2`,
+        [user.id, inviteCode.trim().toUpperCase()]
+      ).catch(() => {}); // best-effort
+    }
+
     const token = signToken(user.id);
 
-    // Send verification email — don't let an email-sending failure
-    // block account creation; log it and let the user request a resend.
     const verifyUrl = `${process.env.FRONTEND_URL || 'https://panini-swap-frontend.vercel.app'}/verify-email?token=${verificationToken}`;
     try {
       await sendVerificationEmail(user.email, user.name, verifyUrl);
@@ -193,6 +214,17 @@ router.post('/login', async (req, res) => {
     }
 
     const token = signToken(user.id);
+
+    // Track login — update last_login_at, increment login_count, create session record
+    await pool.query(
+      `UPDATE users SET last_login_at = NOW(), login_count = login_count + 1 WHERE id = $1`,
+      [user.id]
+    ).catch(() => {});
+    await pool.query(
+      `INSERT INTO user_sessions (user_id) VALUES ($1)`,
+      [user.id]
+    ).catch(() => {});
+
     res.json({ token, user: publicUser(user) });
   } catch (err) {
     console.error(err);
@@ -216,6 +248,13 @@ router.get('/me', requireAuth, async (req, res) => {
     if (rows[0].is_suspended) {
       return res.status(403).json({ error: 'Your account has been suspended. Contact the group admin for details.' });
     }
+    // Keep last_seen fresh on the most recent open session
+    await pool.query(
+      `UPDATE user_sessions SET last_seen = NOW()
+       WHERE user_id = $1 AND ended_at IS NULL
+       AND started_at = (SELECT MAX(started_at) FROM user_sessions WHERE user_id = $1 AND ended_at IS NULL)`,
+      [req.user.id]
+    ).catch(() => {});
     res.json(publicUser(rows[0]));
   } catch (err) {
     console.error(err);
