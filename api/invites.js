@@ -56,14 +56,15 @@ router.post('/validate', async (req, res) => {
 // Admin — generate N invite codes (default 10).
 // ----------------------------------------------------------------
 router.post('/generate', requireAdmin, async (req, res) => {
-  const count = Math.min(parseInt(req.body.count || 10), 100);
+  const count = Math.min(parseInt(req.body.count || 1), 100);
+  const createdBy = req.body.createdBy || 'admin';
   try {
     const codes = [];
     for (let i = 0; i < count; i++) {
-      const code = crypto.randomBytes(4).toString('hex').toUpperCase(); // e.g. A3F9C2B1
+      const code = crypto.randomBytes(4).toString('hex').toUpperCase();
       const { rows } = await pool.query(
-        `INSERT INTO invite_codes (code) VALUES ($1) ON CONFLICT DO NOTHING RETURNING code`,
-        [code]
+        `INSERT INTO invite_codes (code, created_by) VALUES ($1, $2) ON CONFLICT DO NOTHING RETURNING code`,
+        [code, createdBy]
       );
       if (rows[0]) codes.push(rows[0].code);
     }
