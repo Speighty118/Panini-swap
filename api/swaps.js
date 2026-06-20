@@ -12,6 +12,7 @@ const express = require('express');
 const router = express.Router();
 const { Pool } = require('pg');
 const { requireAuth } = require('./middleware/auth');
+const { createNotification } = require('./notifications');
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
@@ -131,6 +132,18 @@ router.post('/', async (req, res) => {
     );
 
     await client.query('COMMIT');
+
+    // Notify the other party that a swap has been proposed
+    const { rows: proposerRows } = await pool.query('SELECT name FROM users WHERE id = $1', [userId]);
+    const otherUserId = swap.user_a_id === userId ? swap.user_b_id : swap.user_a_id;
+    await createNotification(pool, {
+      userId: otherUserId,
+      type: 'swap_proposed',
+      title: `${proposerRows[0]?.name || 'Someone'} proposed a swap`,
+      body: 'Check your matches to accept or decline.',
+      swapId: swap.id,
+    });
+
     res.status(201).json({ swap, items });
   } catch (err) {
     await client.query('ROLLBACK');
@@ -253,6 +266,17 @@ router.post('/:id/accept', async (req, res) => {
           [item.to_user_id, item.sticker_id]
         );
       }
+
+      // Notify both parties that the swap is fully accepted
+      const { rows: userRows } = await pool.query('SELECT name FROM users WHERE id = $1', [userId]);
+      const otherUserId = updated.user_a_id === userId ? updated.user_b_id : updated.user_a_id;
+      await createNotification(pool, {
+        userId: otherUserId,
+        type: 'swap_accepted',
+        title: 'Swap accepted — time to post!',
+        body: `${userRows[0]?.name || 'Your swap partner'} also accepted. Check the swap for their address.`,
+        swapId,
+      });
     }
 
     await client.query('COMMIT');
@@ -322,6 +346,18 @@ router.post('/:id/posted', async (req, res) => {
       `UPDATE swaps SET ${field} = TRUE, updated_at = NOW() WHERE id = $1`,
       [swapId]
     );
+
+    // Notify the other party
+    const { rows: senderRows } = await pool.query('SELECT name FROM users WHERE id = $1', [userId]);
+    const otherUserId = isUserA ? swap.user_b_id : swap.user_a_id;
+    await createNotification(pool, {
+      userId: otherUserId,
+      type: 'swap_posted',
+      title: 'Stickers on their way!',
+      body: `${senderRows[0]?.name || 'Your swap partner'} has posted their stickers.`,
+      swapId,
+    });
+
     res.json({ success: true });
   } catch (err) {
     console.error(err);
