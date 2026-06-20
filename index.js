@@ -39,6 +39,10 @@ app.use(express.json({ limit: '2mb' }));
 // any origin — safe, since every /api/admin route is independently
 // gated by the ADMIN_SECRET check in api/admin.js regardless of origin.
 //
+// Invite routes also allow any origin — safe, since admin endpoints
+// (generate, list, delete) are gated by ADMIN_SECRET in api/invites.js,
+// and the public validate endpoint doesn't require auth.
+//
 // Everything else is restricted to CORS_ORIGIN, which may be a single
 // origin or a comma-separated list (e.g. both the apex and www version
 // of a custom domain): "https://gotonespare.com,https://www.gotonespare.com"
@@ -61,8 +65,9 @@ const restrictedCors = cors({
 const adminCors = cors({ origin: '*' });
 
 app.use('/api/admin', adminCors);
+app.use('/api/invites', adminCors);
 app.use((req, res, next) => {
-  if (req.path.startsWith('/api/admin')) return next();
+  if (req.path.startsWith('/api/admin') || req.path.startsWith('/api/invites')) return next();
   restrictedCors(req, res, next);
 });
 
@@ -137,3 +142,4 @@ app.listen(PORT, () => {
 });
 
 module.exports = app;
+
