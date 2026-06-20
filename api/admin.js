@@ -96,7 +96,7 @@ router.post('/disputes/:id/status', async (req, res) => {
 });
 
 // ----------------------------------------------------------------
-// POST /api/admin/users/:id/suspend
+// GET /api/admin/users/:id/suspend
 // Body: { suspended: true | false }
 // ----------------------------------------------------------------
 router.post('/users/:id/suspend', async (req, res) => {
@@ -114,6 +114,97 @@ router.post('/users/:id/suspend', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to update suspension status' });
+  }
+});
+
+// ----------------------------------------------------------------
+// GET /api/admin/analytics
+// God's-eye view: every user with their activity stats.
+// ----------------------------------------------------------------
+router.get('/analytics', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT
+          u.id, u.name, u.email, u.created_at, u.last_login_at,
+          u.login_count, u.is_suspended, u.email_verified,
+          u.times_reported,
+          COUNT(DISTINCT ud.sticker_id) AS duplicates_count,
+          COUNT(DISTINCT un.sticker_id) AS needs_count,
+          COUNT(DISTINCT s.id) AS swaps_count,
+          COUNT(DISTINCT CASE WHEN s.status = 'completed' THEN s.id END) AS completed_swaps,
+          MAX(s.updated_at) AS last_swap_activity,
+          ROUND(AVG(sess.session_minutes)::numeric, 1) AS avg_session_minutes,
+          COUNT(DISTINCT sess.id) AS total_sessions
+       FROM users u
+       LEFT JOIN user_duplicates ud ON ud.user_id = u.id
+       LEFT JOIN user_needs un ON un.user_id = u.id
+       LEFT JOIN swaps s ON (s.user_a_id = u.id OR s.user_b_id = u.id)
+       LEFT JOIN (
+         SELECT user_id, id,
+           EXTRACT(EPOCH FROM (COALESCE(ended_at, last_seen) - started_at)) / 60 AS session_minutes
+         FROM user_sessions
+       ) sess ON sess.user_id = u.id
+       GROUP BY u.id
+       ORDER BY u.last_login_at DESC NULLS LAST`
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch analytics' });
+  }
+});
+
+// ----------------------------------------------------------------
+// GET /api/admin/overview
+// High-level platform stats: totals, recent activity.
+// ----------------------------------------------------------------
+router.get('/overview', async (req, res) => {
+  try {
+    const [usersRes, swapsRes, matchesRes, feedbackRes] = await Promise.all([
+      pool.query(`SELECT
+        COUNT(*) AS total_users,
+        COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '7 days') AS new_users_7d,
+        COUNT(*) FILTER (WHERE last_login_at > NOW() - INTERVAL '7 days') AS active_7d,
+        COUNT(*) FILTER (WHERE last_login_at > NOW() - INTERVAL '24 hours') AS active_24h
+        FROM users`),
+      pool.query(`SELECT
+        COUNT(*) AS total_swaps,
+        COUNT(*) FILTER (WHERE status = 'completed') AS completed,
+        COUNT(*) FILTER (WHERE status = 'proposed' OR status = 'accepted') AS active,
+        COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '7 days') AS new_7d
+        FROM swaps`),
+      pool.query(`SELECT COUNT(*) AS pending_matches FROM matches WHERE status = 'pending'`),
+      pool.query(`SELECT COUNT(*) AS total_feedback FROM feedback`),
+    ]);
+    res.json({
+      users: usersRes.rows[0],
+      swaps: swapsRes.rows[0],
+      matches: matchesRes.rows[0],
+      feedback: feedbackRes.rows[0],
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch overview' });
+  }
+});
+
+// ----------------------------------------------------------------
+// GET /api/admin/invites-list
+// Lists all invite codes (proxies through admin auth rather than
+// requiring the public invites endpoint).
+// ----------------------------------------------------------------
+router.get('/invites-list', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT i.*, u.name AS used_by_name, u.email AS used_by_email
+       FROM invite_codes i
+       LEFT JOIN users u ON u.id = i.used_by
+       ORDER BY i.created_at DESC`
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch codes' });
   }
 });
 
