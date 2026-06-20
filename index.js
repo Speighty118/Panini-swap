@@ -23,6 +23,8 @@ const disputeRoutes = require('./api/disputes');
 const adminRoutes = require('./api/admin');
 const messageRoutes = require('./api/messages');
 const { router: notificationRoutes } = require('./api/notifications');
+const inviteRoutes = require('./api/invites');
+const feedbackRoutes = require('./api/feedback');
 const { runMatchingJob } = require('./jobs/run_matching');
 
 const app = express();
@@ -90,6 +92,8 @@ app.use('/api/swaps/:swapId/messages', messageRoutes);
 app.use('/api/ratings', ratingRoutes);
 app.use('/api/disputes', disputeRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/invites', inviteRoutes);
+app.use('/api/feedback', feedbackRoutes);
 app.use('/api/admin', adminRoutes);
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
