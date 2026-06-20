@@ -180,4 +180,62 @@ router.delete('/me/needs/:stickerId', requireAuth, async (req, res) => {
   }
 });
 
+// ----------------------------------------------------------------
+// POST /api/stickers/me/duplicates/bulk
+// Body: { stickerIds: [id, id, ...] }
+// Adds multiple duplicates at once (quantity 1 each, upserts).
+// ----------------------------------------------------------------
+router.post('/me/duplicates/bulk', requireAuth, async (req, res) => {
+  const { stickerIds } = req.body;
+  if (!Array.isArray(stickerIds) || stickerIds.length === 0) {
+    return res.status(400).json({ error: 'stickerIds must be a non-empty array' });
+  }
+  if (stickerIds.length > 100) {
+    return res.status(400).json({ error: 'Maximum 100 stickers per bulk add' });
+  }
+  try {
+    for (const id of stickerIds) {
+      await pool.query(
+        `INSERT INTO user_duplicates (user_id, sticker_id, quantity)
+         VALUES ($1, $2, 1)
+         ON CONFLICT (user_id, sticker_id) DO NOTHING`,
+        [req.user.id, id]
+      );
+    }
+    res.status(201).json({ added: stickerIds.length });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to bulk add duplicates' });
+  }
+});
+
+// ----------------------------------------------------------------
+// POST /api/stickers/me/needs/bulk
+// Body: { stickerIds: [id, id, ...] }
+// Adds multiple needs at once (upserts, ignores already-added).
+// ----------------------------------------------------------------
+router.post('/me/needs/bulk', requireAuth, async (req, res) => {
+  const { stickerIds } = req.body;
+  if (!Array.isArray(stickerIds) || stickerIds.length === 0) {
+    return res.status(400).json({ error: 'stickerIds must be a non-empty array' });
+  }
+  if (stickerIds.length > 100) {
+    return res.status(400).json({ error: 'Maximum 100 stickers per bulk add' });
+  }
+  try {
+    for (const id of stickerIds) {
+      await pool.query(
+        `INSERT INTO user_needs (user_id, sticker_id)
+         VALUES ($1, $2)
+         ON CONFLICT (user_id, sticker_id) DO NOTHING`,
+        [req.user.id, id]
+      );
+    }
+    res.status(201).json({ added: stickerIds.length });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to bulk add needs' });
+  }
+});
+
 module.exports = router;
