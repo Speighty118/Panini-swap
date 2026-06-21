@@ -155,6 +155,52 @@ router.get('/analytics', async (req, res) => {
 });
 
 // ----------------------------------------------------------------
+// GET /api/admin/swaps
+// All swaps with participant names, status, sticker counts.
+// Optional ?status= filter (proposed, accepted, posted, completed,
+// declined, disputed). Ordered by most recently updated first.
+// ----------------------------------------------------------------
+router.get('/swaps', async (req, res) => {
+  const { status } = req.query;
+  try {
+    const conditions = status ? `WHERE s.status = $1` : '';
+    const params = status ? [status] : [];
+    const { rows } = await pool.query(
+      `SELECT
+         s.id,
+         s.status,
+         s.created_at,
+         s.updated_at,
+         s.user_a_accepted,
+         s.user_b_accepted,
+         s.user_a_posted,
+         s.user_b_posted,
+         s.user_a_received,
+         s.user_b_received,
+         ua.name  AS user_a_name,
+         ua.email AS user_a_email,
+         ub.name  AS user_b_name,
+         ub.email AS user_b_email,
+         COUNT(si.id)                                          AS total_stickers,
+         COUNT(si.id) FILTER (WHERE si.from_user_id = s.user_a_id) AS a_gives,
+         COUNT(si.id) FILTER (WHERE si.from_user_id = s.user_b_id) AS b_gives
+       FROM swaps s
+       JOIN users ua ON ua.id = s.user_a_id
+       JOIN users ub ON ub.id = s.user_b_id
+       LEFT JOIN swap_items si ON si.swap_id = s.id
+       ${conditions}
+       GROUP BY s.id, ua.name, ua.email, ub.name, ub.email
+       ORDER BY s.updated_at DESC`,
+      params
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch swaps' });
+  }
+});
+
+// ----------------------------------------------------------------
 // GET /api/admin/overview
 // High-level platform stats: totals, recent activity.
 // ----------------------------------------------------------------
