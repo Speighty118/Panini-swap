@@ -75,7 +75,11 @@ router.get('/me/duplicates', requireAuth, async (req, res) => {
        FROM user_duplicates ud
        JOIN stickers s ON s.id = ud.sticker_id
        WHERE ud.user_id = $1
-       ORDER BY s.sticker_number`,
+       ORDER BY
+         s.team_name,
+         regexp_replace(s.sticker_number, '[^0-9]', '', 'g') = '' DESC,
+         CAST(NULLIF(regexp_replace(s.sticker_number, '[^0-9]', '', 'g'), '') AS INTEGER) ASC,
+         s.sticker_number ASC`,
       [req.user.id]
     );
     res.json(rows);
