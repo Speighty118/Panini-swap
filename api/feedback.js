@@ -61,16 +61,22 @@ router.post('/', async (req, res) => {
 
 // ----------------------------------------------------------------
 // GET /api/feedback
-// Admin only — list all feedback submissions.
+// Admin only — list all feedback submissions, optionally filtered
+// by status: ?status=pending|fixed|declined
 // ----------------------------------------------------------------
 router.get('/', requireAdmin, async (req, res) => {
+  const { status } = req.query;
   try {
+    const conditions = status ? `WHERE f.status = $1` : '';
+    const params = status ? [status] : [];
     const { rows } = await pool.query(
       `SELECT f.*, u.name AS user_name, u.email AS user_email
        FROM feedback f
        LEFT JOIN users u ON u.id = f.user_id
+       ${conditions}
        ORDER BY f.created_at DESC
-       LIMIT 200`
+       LIMIT 500`,
+      params
     );
     res.json(rows);
   } catch (err) {
