@@ -229,6 +229,38 @@ router.post('/:id/accept', async (req, res) => {
     const isUserA = swap.user_a_id === userId;
     const field = isUserA ? 'user_a_accepted' : 'user_b_accepted';
 
+    // Before accepting, verify this user still actually has all the
+    // stickers they're supposed to give. If any have already been
+    // committed to another accepted swap (and therefore removed from
+    // user_duplicates), block the acceptance with a clear message
+    // rather than letting them over-promise.
+    const { rows: itemsToGive } = await client.query(
+      `SELECT si.sticker_id, s.sticker_number, s.description
+       FROM swap_items si
+       JOIN stickers s ON s.id = si.sticker_id
+       WHERE si.swap_id = $1 AND si.from_user_id = $2`,
+      [swapId, userId]
+    );
+
+    const missingStickers = [];
+    for (const item of itemsToGive) {
+      const { rows: dupeRows } = await client.query(
+        `SELECT 1 FROM user_duplicates WHERE user_id = $1 AND sticker_id = $2`,
+        [userId, item.sticker_id]
+      );
+      if (!dupeRows.length) {
+        missingStickers.push(`${item.sticker_number} (${item.description})`);
+      }
+    }
+
+    if (missingStickers.length > 0) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({
+        error: `You no longer have all the stickers needed for this swap. The following have already been committed to another accepted swap: ${missingStickers.join(', ')}. Please check your other active swaps.`,
+        missingStickers,
+      });
+    }
+
     await client.query(
       `UPDATE swaps SET ${field} = TRUE, updated_at = NOW() WHERE id = $1`,
       [swapId]
