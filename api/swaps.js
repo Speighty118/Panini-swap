@@ -126,6 +126,35 @@ router.post('/', async (req, res) => {
     const equalCount = Math.min(aToB.length, bToA.length);
     const items = [...aToB.slice(0, equalCount), ...bToA.slice(0, equalCount)];
 
+    // Option B duplicate check: before committing, verify none of these
+    // stickers are already part of an active pending/accepted swap for
+    // EITHER user — not just the proposer. This prevents both sides from
+    // accidentally double-promising the same sticker.
+    const proposalStickerIds = items.map(i => i.sticker_id);
+    if (proposalStickerIds.length > 0) {
+      const { rows: conflicts } = await client.query(
+        `SELECT si.sticker_id, s.sticker_number, s.description,
+                sw.id AS conflicting_swap_id,
+                si.from_user_id AS committed_by
+         FROM swap_items si
+         JOIN swaps sw ON sw.id = si.swap_id
+         JOIN stickers s ON s.id = si.sticker_id
+         WHERE sw.status IN ('proposed', 'accepted')
+           AND sw.id != $1
+           AND si.sticker_id = ANY($2::int[])
+           AND si.from_user_id IN ($3, $4)`,
+        [swap.id, proposalStickerIds, match.user_a_id, match.user_b_id]
+      );
+      if (conflicts.length > 0) {
+        await client.query('ROLLBACK');
+        const names = conflicts.map(c => `${c.sticker_number} (${c.description})`).join(', ');
+        return res.status(409).json({
+          error: `Some stickers in this swap are already committed to another pending swap: ${names}. The existing swap needs to be accepted or declined before a new one can be proposed with the same stickers.`,
+          conflicts: conflicts.map(c => ({ stickerId: c.sticker_id, swapId: c.conflicting_swap_id })),
+        });
+      }
+    }
+
     for (const item of items) {
       await client.query(
         `INSERT INTO swap_items (swap_id, sticker_id, from_user_id, to_user_id)
