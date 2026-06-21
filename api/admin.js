@@ -217,6 +217,52 @@ router.post('/broadcast', async (req, res) => {
 });
 
 // ----------------------------------------------------------------
+// POST /api/admin/feedback/:id/resolve
+// Mark feedback as fixed or declined, and send the user a
+// notification via their bell. Only works for logged-in submissions.
+// Body: { status: 'fixed' | 'declined' }
+// ----------------------------------------------------------------
+router.post('/feedback/:id/resolve', async (req, res) => {
+  const { status } = req.body;
+  if (!['fixed', 'declined'].includes(status)) {
+    return res.status(400).json({ error: 'status must be fixed or declined' });
+  }
+  try {
+    const { rows } = await pool.query(
+      `UPDATE feedback SET status = $1 WHERE id = $2
+       RETURNING *, (SELECT name FROM users WHERE id = feedback.user_id) AS user_name`,
+      [status, req.params.id]
+    );
+    const feedback = rows[0];
+    if (!feedback) return res.status(404).json({ error: 'Feedback not found' });
+
+    // Send notification if the feedback came from a logged-in user
+    if (feedback.user_id) {
+      const messages = {
+        fixed: {
+          title: '✅ Your feedback has been implemented!',
+          body: "Great news — the feature you suggested has been added to Got One Spare? Give the site a quick refresh and you should see the change. Thank you so much for taking the time to send feedback, it genuinely makes the platform better. Keep it coming — every piece of feedback helps as we work towards the full launch! 🙌",
+        },
+        declined: {
+          title: '👋 An update on your feedback',
+          body: "Thanks so much for your feedback — we've read it carefully and really appreciate you taking the time. This particular suggestion isn't something we're able to implement right now, but we've noted it down and may well revisit it in the future. Please keep the feedback coming — it all helps as we work towards launching to everyone! 🙏",
+        },
+      };
+      const msg = messages[status];
+      await pool.query(
+        `INSERT INTO notifications (user_id, type, title, body) VALUES ($1, 'announcement', $2, $3)`,
+        [feedback.user_id, msg.title, msg.body]
+      );
+    }
+
+    res.json({ success: true, status, userName: feedback.user_name });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to resolve feedback' });
+  }
+});
+
+// ----------------------------------------------------------------
 // POST /api/admin/feedback/:id/reply
 // Send a notification reply to the user who submitted a specific
 // piece of feedback. Only works if the feedback was submitted by
