@@ -51,14 +51,23 @@ router.get('/', async (req, res) => {
 
 // ----------------------------------------------------------------
 // GET /api/stickers/teams
-// List distinct team names, for building a team filter dropdown.
+// List distinct team names with their sticker number range,
+// for building a team filter dropdown.
 // ----------------------------------------------------------------
 router.get('/teams', async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT DISTINCT team_name FROM stickers WHERE team_name IS NOT NULL ORDER BY team_name`
+      `SELECT
+         team_name,
+         MIN(sticker_number) AS first_number,
+         MAX(sticker_number) AS last_number,
+         COUNT(*) AS sticker_count
+       FROM stickers
+       WHERE team_name IS NOT NULL
+       GROUP BY team_name
+       ORDER BY team_name`
     );
-    res.json(rows.map(r => r.team_name));
+    res.json(rows);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to fetch teams' });
