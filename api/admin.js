@@ -119,7 +119,8 @@ router.post('/users/:id/suspend', async (req, res) => {
 
 // ----------------------------------------------------------------
 // GET /api/admin/analytics
-// God's-eye view: every user with their activity stats.
+// God's-eye view: every user with their activity stats,
+// profile photo, and rating summary.
 // ----------------------------------------------------------------
 router.get('/analytics', async (req, res) => {
   try {
@@ -127,14 +128,28 @@ router.get('/analytics', async (req, res) => {
       `SELECT
           u.id, u.name, u.email, u.created_at, u.last_login_at,
           u.login_count, u.is_suspended, u.email_verified,
-          u.times_reported,
+          u.times_reported, u.profile_photo,
           COUNT(DISTINCT ud.sticker_id) AS duplicates_count,
           COUNT(DISTINCT un.sticker_id) AS needs_count,
           COUNT(DISTINCT s.id) AS swaps_count,
           COUNT(DISTINCT CASE WHEN s.status = 'completed' THEN s.id END) AS completed_swaps,
           MAX(s.updated_at) AS last_swap_activity,
           ROUND(AVG(sess.session_minutes)::numeric, 1) AS avg_session_minutes,
-          COUNT(DISTINCT sess.id) AS total_sessions
+          COUNT(DISTINCT sess.id) AS total_sessions,
+          ROUND(AVG(r.stars)::numeric, 1) AS avg_rating,
+          COUNT(DISTINCT r.id) AS rating_count,
+          (
+            SELECT json_agg(json_build_object(
+              'stars', r2.stars,
+              'comment', r2.comment,
+              'reviewer_name', ru.name,
+              'created_at', r2.created_at
+            ) ORDER BY r2.created_at DESC)
+            FROM ratings r2
+            JOIN users ru ON ru.id = r2.reviewer_id
+            WHERE r2.rated_user_id = u.id
+            LIMIT 5
+          ) AS recent_reviews
        FROM users u
        LEFT JOIN user_duplicates ud ON ud.user_id = u.id
        LEFT JOIN user_needs un ON un.user_id = u.id
@@ -144,6 +159,7 @@ router.get('/analytics', async (req, res) => {
            EXTRACT(EPOCH FROM (COALESCE(ended_at, last_seen) - started_at)) / 60 AS session_minutes
          FROM user_sessions
        ) sess ON sess.user_id = u.id
+       LEFT JOIN ratings r ON r.rated_user_id = u.id
        GROUP BY u.id
        ORDER BY u.last_login_at DESC NULLS LAST`
     );
