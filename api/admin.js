@@ -337,7 +337,7 @@ router.post('/feedback/:id/reply', async (req, res) => {
       [
         feedback.user_id,
         'Reply to your feedback',
-        message.trim(),
+        `You said: "${feedback.message.slice(0, 120)}${feedback.message.length > 120 ? '…' : ''}"\n\n${message.trim()}`,
       ]
     );
     res.json({ success: true, sentTo: feedback.user_name });
