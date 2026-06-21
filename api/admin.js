@@ -269,7 +269,7 @@ router.post('/broadcast', async (req, res) => {
 // Body: { status: 'fixed' | 'declined' }
 // ----------------------------------------------------------------
 router.post('/feedback/:id/resolve', async (req, res) => {
-  const { status } = req.body;
+  const { status, notify = true } = req.body;
   if (!['fixed', 'declined'].includes(status)) {
     return res.status(400).json({ error: 'status must be fixed or declined' });
   }
@@ -282,8 +282,8 @@ router.post('/feedback/:id/resolve', async (req, res) => {
     const feedback = rows[0];
     if (!feedback) return res.status(404).json({ error: 'Feedback not found' });
 
-    // Send notification if the feedback came from a logged-in user
-    if (feedback.user_id) {
+    // Only send notification if notify is true and the feedback has a user
+    if (notify && feedback.user_id) {
       const messages = {
         fixed: {
           title: '✅ Your feedback has been implemented!',
@@ -301,7 +301,7 @@ router.post('/feedback/:id/resolve', async (req, res) => {
       );
     }
 
-    res.json({ success: true, status, userName: feedback.user_name });
+    res.json({ success: true, status, notify, userName: feedback.user_name });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to resolve feedback' });
