@@ -33,7 +33,13 @@ router.get('/', async (req, res) => {
     }
 
     const { rows } = await pool.query(
-      `SELECT * FROM stickers WHERE ${conditions.join(' AND ')} ORDER BY sticker_number`,
+      `SELECT * FROM stickers
+       WHERE ${conditions.join(' AND ')}
+       ORDER BY
+         team_name,
+         regexp_replace(sticker_number, '[^0-9]', '', 'g') = '' DESC,
+         CAST(NULLIF(regexp_replace(sticker_number, '[^0-9]', '', 'g'), '') AS INTEGER) ASC,
+         sticker_number ASC`,
       params
     );
     res.json(rows);
