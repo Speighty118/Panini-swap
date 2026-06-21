@@ -113,10 +113,18 @@ router.post('/', async (req, res) => {
     );
     const swap = swapRows[0];
 
-    const { rows: items } = await client.query(
+    const { rows: allItems } = await client.query(
       `SELECT * FROM get_swap_proposal($1, $2, 5)`,
       [match.user_a_id, match.user_b_id]
     );
+
+    // Enforce equal swap: trim both sides to the smaller count so
+    // neither party gives more than they receive. This is the 1-for-1
+    // philosophy — every sticker has equal value regardless of player.
+    const aToB = allItems.filter(i => i.from_user_id === match.user_a_id);
+    const bToA = allItems.filter(i => i.from_user_id === match.user_b_id);
+    const equalCount = Math.min(aToB.length, bToA.length);
+    const items = [...aToB.slice(0, equalCount), ...bToA.slice(0, equalCount)];
 
     for (const item of items) {
       await client.query(
