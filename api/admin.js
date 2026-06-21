@@ -217,6 +217,45 @@ router.post('/broadcast', async (req, res) => {
 });
 
 // ----------------------------------------------------------------
+// POST /api/admin/feedback/:id/reply
+// Send a notification reply to the user who submitted a specific
+// piece of feedback. Only works if the feedback was submitted by
+// a logged-in user (anonymous submissions can't be replied to).
+// ----------------------------------------------------------------
+router.post('/feedback/:id/reply', async (req, res) => {
+  const { message } = req.body;
+  if (!message || !message.trim()) {
+    return res.status(400).json({ error: 'Message is required' });
+  }
+  try {
+    const { rows } = await pool.query(
+      `SELECT f.*, u.name AS user_name FROM feedback f
+       LEFT JOIN users u ON u.id = f.user_id
+       WHERE f.id = $1`,
+      [req.params.id]
+    );
+    const feedback = rows[0];
+    if (!feedback) return res.status(404).json({ error: 'Feedback not found' });
+    if (!feedback.user_id) {
+      return res.status(400).json({ error: 'This feedback was submitted anonymously — no user to notify' });
+    }
+    await pool.query(
+      `INSERT INTO notifications (user_id, type, title, body)
+       VALUES ($1, 'announcement', $2, $3)`,
+      [
+        feedback.user_id,
+        'Reply to your feedback',
+        message.trim(),
+      ]
+    );
+    res.json({ success: true, sentTo: feedback.user_name });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to send reply' });
+  }
+});
+
+// ----------------------------------------------------------------
 // GET /api/admin/invites-list
 // Lists all invite codes (proxies through admin auth rather than
 // requiring the public invites endpoint).
