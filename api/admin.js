@@ -231,6 +231,228 @@ router.get('/swaps', async (req, res) => {
 });
 
 // ----------------------------------------------------------------
+// POST /api/admin/broadcast-one
+// Send a notification to a single specific user.
+// Body: { userId, title, body }
+// ----------------------------------------------------------------
+router.post('/broadcast-one', async (req, res) => {
+  const { userId, title, body } = req.body;
+  if (!userId || !title) return res.status(400).json({ error: 'userId and title required' });
+  try {
+    await pool.query(
+      `INSERT INTO notifications (user_id, type, title, body) VALUES ($1, 'announcement', $2, $3)`,
+      [userId, title, body || null]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to send notification' });
+  }
+});
+
+// ----------------------------------------------------------------
+// GET /api/admin/signups-chart
+// Daily new signups for the past 30 days.
+// ----------------------------------------------------------------
+router.get('/signups-chart', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT
+         DATE(created_at) AS date,
+         COUNT(*) AS count
+       FROM users
+       WHERE created_at > NOW() - INTERVAL '30 days'
+       GROUP BY DATE(created_at)
+       ORDER BY date ASC`
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch signup chart' });
+  }
+});
+
+// ----------------------------------------------------------------
+// GET /api/admin/swap-funnel
+// Count of swaps at each status stage right now.
+// ----------------------------------------------------------------
+router.get('/swap-funnel', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT status, COUNT(*) AS count FROM swaps GROUP BY status ORDER BY
+       CASE status
+         WHEN 'proposed' THEN 1
+         WHEN 'accepted' THEN 2
+         WHEN 'posted' THEN 3
+         WHEN 'completed' THEN 4
+         WHEN 'declined' THEN 5
+         WHEN 'disputed' THEN 6
+         ELSE 7
+       END`
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch swap funnel' });
+  }
+});
+
+// ----------------------------------------------------------------
+// GET /api/admin/sticker-heatmap
+// Top 20 most-needed and top 20 most-duplicated stickers.
+// ----------------------------------------------------------------
+router.get('/sticker-heatmap', async (req, res) => {
+  try {
+    const [neededRes, dupedRes] = await Promise.all([
+      pool.query(
+        `SELECT s.sticker_number, s.description, s.team_name,
+                COUNT(*) AS want_count
+         FROM user_needs un
+         JOIN stickers s ON s.id = un.sticker_id
+         GROUP BY s.id, s.sticker_number, s.description, s.team_name
+         ORDER BY want_count DESC LIMIT 20`
+      ),
+      pool.query(
+        `SELECT s.sticker_number, s.description, s.team_name,
+                COUNT(*) AS have_count,
+                SUM(ud.quantity) AS total_copies
+         FROM user_duplicates ud
+         JOIN stickers s ON s.id = ud.sticker_id
+         GROUP BY s.id, s.sticker_number, s.description, s.team_name
+         ORDER BY have_count DESC LIMIT 20`
+      ),
+    ]);
+    res.json({ mostNeeded: neededRes.rows, mostDuplicated: dupedRes.rows });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch sticker heatmap' });
+  }
+});
+
+// ----------------------------------------------------------------
+// GET /api/admin/zero-stickers
+// Users who signed up but have listed 0 duplicates AND 0 needs.
+// ----------------------------------------------------------------
+router.get('/zero-stickers', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT u.id, u.name, u.email, u.created_at, u.last_login_at, u.login_count
+       FROM users u
+       LEFT JOIN user_duplicates ud ON ud.user_id = u.id
+       LEFT JOIN user_needs un ON un.user_id = u.id
+       WHERE ud.sticker_id IS NULL AND un.sticker_id IS NULL
+       GROUP BY u.id
+       ORDER BY u.created_at DESC`
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch zero-sticker users' });
+  }
+});
+
+// ----------------------------------------------------------------
+// GET /api/admin/live-locations
+// Users active in the last 30 minutes with geolocation data,
+// for the live map. Returns lat/lng, city, country, name.
+// ----------------------------------------------------------------
+router.get('/live-locations', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT u.id, u.name, u.city, u.country, u.latitude, u.longitude,
+              u.last_login_at,
+              COUNT(DISTINCT ud.sticker_id) AS duplicates_count,
+              COUNT(DISTINCT un.sticker_id) AS needs_count
+       FROM users u
+       LEFT JOIN user_duplicates ud ON ud.user_id = u.id
+       LEFT JOIN user_needs un ON un.user_id = u.id
+       WHERE u.latitude IS NOT NULL
+         AND u.last_login_at > NOW() - INTERVAL '24 hours'
+       GROUP BY u.id
+       ORDER BY u.last_login_at DESC`
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch live locations' });
+  }
+});
+
+// ----------------------------------------------------------------
+// GET /api/admin/top-traders
+// Leaderboard of users with the most completed swaps.
+// ----------------------------------------------------------------
+router.get('/top-traders', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT u.id, u.name, u.email,
+              COUNT(DISTINCT s.id) AS completed_swaps,
+              ROUND(AVG(r.stars)::numeric, 1) AS avg_rating
+       FROM users u
+       JOIN swaps s ON (s.user_a_id = u.id OR s.user_b_id = u.id)
+         AND s.status = 'completed'
+       LEFT JOIN ratings r ON r.ratee_id = u.id
+       GROUP BY u.id
+       HAVING COUNT(DISTINCT s.id) > 0
+       ORDER BY completed_swaps DESC
+       LIMIT 20`
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch top traders' });
+  }
+});
+
+// ----------------------------------------------------------------
+// GET /api/admin/oldest-pending
+// Swaps stuck in proposed state longest — inactivity flags.
+// ----------------------------------------------------------------
+router.get('/oldest-pending', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT s.id, s.created_at, s.updated_at, s.status,
+              ua.name AS user_a_name, ua.email AS user_a_email,
+              ub.name AS user_b_name, ub.email AS user_b_email,
+              s.user_a_accepted, s.user_b_accepted,
+              EXTRACT(EPOCH FROM (NOW() - s.created_at))/86400 AS days_old
+       FROM swaps s
+       JOIN users ua ON ua.id = s.user_a_id
+       JOIN users ub ON ub.id = s.user_b_id
+       WHERE s.status = 'proposed'
+       ORDER BY s.created_at ASC
+       LIMIT 20`
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch oldest pending swaps' });
+  }
+});
+
+// ----------------------------------------------------------------
+// GET /api/admin/dau-chart
+// Daily active users for the past 30 days.
+// ----------------------------------------------------------------
+router.get('/dau-chart', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT
+         DATE(last_login_at) AS date,
+         COUNT(*) AS active_users
+       FROM users
+       WHERE last_login_at > NOW() - INTERVAL '30 days'
+       GROUP BY DATE(last_login_at)
+       ORDER BY date ASC`
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch DAU chart' });
+  }
+});
+
+// ----------------------------------------------------------------
 // GET /api/admin/overview
 // High-level platform stats: totals, recent activity.
 // ----------------------------------------------------------------
