@@ -417,6 +417,68 @@ router.post('/:id/decline', async (req, res) => {
 });
 
 // ----------------------------------------------------------------
+// POST /api/swaps/:id/withdraw
+// Withdraw from a swap that's still in 'proposed' state, but only
+// if EXACTLY ONE side has accepted — i.e. you accepted but they
+// haven't, or they accepted but you want to pull out before they do.
+// Once both sides have accepted the swap is binding.
+// ----------------------------------------------------------------
+router.post('/:id/withdraw', async (req, res) => {
+  const userId = req.user.id;
+  const swapId = req.params.id;
+
+  try {
+    const { rows } = await pool.query(
+      `SELECT s.*, ua.name AS user_a_name, ub.name AS user_b_name
+       FROM swaps s
+       JOIN users ua ON ua.id = s.user_a_id
+       JOIN users ub ON ub.id = s.user_b_id
+       WHERE s.id = $1`,
+      [swapId]
+    );
+    const swap = rows[0];
+    if (!swap) return res.status(404).json({ error: 'Swap not found' });
+    if (swap.user_a_id !== userId && swap.user_b_id !== userId) {
+      return res.status(403).json({ error: 'Not your swap' });
+    }
+    if (swap.status !== 'proposed') {
+      return res.status(400).json({ error: 'You can only withdraw before both sides have accepted' });
+    }
+    // Block if both have already accepted — swap is binding at that point
+    if (swap.user_a_accepted && swap.user_b_accepted) {
+      return res.status(400).json({ error: 'Both sides have already accepted — the swap is binding. Use the dispute process if there is a problem.' });
+    }
+
+    const withdrawerName = userId === swap.user_a_id ? swap.user_a_name : swap.user_b_name;
+    const otherUserId = userId === swap.user_a_id ? swap.user_b_id : swap.user_a_id;
+
+    // Mark as declined (reuse declined status — withdraw is a soft decline)
+    await pool.query(
+      `UPDATE swaps SET status = 'declined', updated_at = NOW(),
+       declined_by_id = $1, decline_reason = 'Withdrawn by proposer'
+       WHERE id = $2`,
+      [userId, swapId]
+    );
+
+    // Notify the other party
+    await pool.query(
+      `INSERT INTO notifications (user_id, type, title, body)
+       VALUES ($1, 'swap_declined', $2, $3)`,
+      [
+        otherUserId,
+        'Swap withdrawn',
+        `${withdrawerName} has withdrawn from your swap. Your stickers are available for new matches.`,
+      ]
+    ).catch(() => {});
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to withdraw from swap' });
+  }
+});
+
+// ----------------------------------------------------------------
 // POST /api/swaps/:id/posted
 // Mark this user's side as having posted their stickers.
 // ----------------------------------------------------------------
