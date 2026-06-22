@@ -61,13 +61,25 @@ router.get('/teams', async (req, res) => {
          team_name,
          MIN(sticker_number) AS first_number,
          MAX(sticker_number) AS last_number,
-         COUNT(*) AS sticker_count
+         COUNT(*) AS sticker_count,
+         MIN(CAST(NULLIF(regexp_replace(sticker_number, '[^0-9]', '', 'g'), '') AS INTEGER)) AS first_num_int,
+         MAX(CAST(NULLIF(regexp_replace(sticker_number, '[^0-9]', '', 'g'), '') AS INTEGER)) AS last_num_int
        FROM stickers
        WHERE team_name IS NOT NULL
        GROUP BY team_name
        ORDER BY team_name`
     );
-    res.json(rows);
+    // Build the display range using numeric sort rather than alphabetical,
+    // so FWC1–FWC19 shows correctly instead of FWC1–FWC9
+    const result = rows.map(r => {
+      const prefix = r.first_number.replace(/[0-9]/g, '');
+      return {
+        ...r,
+        first_number: r.first_num_int ? `${prefix}${r.first_num_int}` : r.first_number,
+        last_number: r.last_num_int ? `${prefix}${r.last_num_int}` : r.last_number,
+      };
+    });
+    res.json(result);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to fetch teams' });
