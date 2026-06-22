@@ -62,7 +62,7 @@ const restrictedCors = cors({
 // Admin-accessible routes (admin.html is a local file with null origin,
 // so these need permissive CORS — all are protected by their own auth).
 const adminCors = cors({ origin: '*' });
-const ADMIN_PATHS = ['/api/admin', '/api/invites', '/api/feedback'];
+const ADMIN_PATHS = ['/api/admin', '/api/invites', '/api/feedback', '/api/donations'];
 
 ADMIN_PATHS.forEach(path => app.use(path, adminCors));
 
