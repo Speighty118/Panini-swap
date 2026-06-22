@@ -205,6 +205,8 @@ router.get('/swaps', async (req, res) => {
          s.user_b_posted,
          s.user_a_received,
          s.user_b_received,
+         s.decline_reason,
+         s.declined_by_id,
          ua.name  AS user_a_name,
          ua.email AS user_a_email,
          ub.name  AS user_b_name,
