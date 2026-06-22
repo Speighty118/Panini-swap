@@ -510,9 +510,9 @@ router.post('/:id/posted', async (req, res) => {
 
     const isUserA = swap.user_a_id === userId;
     const field = isUserA ? 'user_a_posted' : 'user_b_posted';
+    const otherPostedField = isUserA ? 'user_b_posted' : 'user_a_posted';
 
-    // Store photo on the swap — one photo column shared, last poster wins
-    // (in practice only one person posts at a time so this is fine)
+    // Store photo on the swap and mark this user's side as posted
     if (photo) {
       await pool.query(
         `UPDATE swaps SET ${field} = TRUE, postage_photo = $1, updated_at = NOW() WHERE id = $2`,
@@ -521,6 +521,14 @@ router.post('/:id/posted', async (req, res) => {
     } else {
       await pool.query(
         `UPDATE swaps SET ${field} = TRUE, updated_at = NOW() WHERE id = $1`,
+        [swapId]
+      );
+    }
+
+    // If the other side has already posted too, advance status to 'posted'
+    if (swap[otherPostedField]) {
+      await pool.query(
+        `UPDATE swaps SET status = 'posted', updated_at = NOW() WHERE id = $1`,
         [swapId]
       );
     }
