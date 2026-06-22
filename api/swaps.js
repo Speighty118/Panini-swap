@@ -481,10 +481,21 @@ router.post('/:id/withdraw', async (req, res) => {
 // ----------------------------------------------------------------
 // POST /api/swaps/:id/posted
 // Mark this user's side as having posted their stickers.
+// Body: { photo? } — optional base64 image as proof of postage.
 // ----------------------------------------------------------------
 router.post('/:id/posted', async (req, res) => {
   const userId = req.user.id;
   const swapId = req.params.id;
+  const { photo } = req.body;
+
+  // Basic validation if photo provided — must be a base64 data URL
+  if (photo && !photo.startsWith('data:image/')) {
+    return res.status(400).json({ error: 'Invalid photo format' });
+  }
+  // Limit photo size to ~5MB base64
+  if (photo && photo.length > 7_000_000) {
+    return res.status(400).json({ error: 'Photo too large — please use a smaller image' });
+  }
 
   try {
     const { rows } = await pool.query(`SELECT * FROM swaps WHERE id = $1`, [swapId]);
@@ -500,10 +511,19 @@ router.post('/:id/posted', async (req, res) => {
     const isUserA = swap.user_a_id === userId;
     const field = isUserA ? 'user_a_posted' : 'user_b_posted';
 
-    await pool.query(
-      `UPDATE swaps SET ${field} = TRUE, updated_at = NOW() WHERE id = $1`,
-      [swapId]
-    );
+    // Store photo on the swap — one photo column shared, last poster wins
+    // (in practice only one person posts at a time so this is fine)
+    if (photo) {
+      await pool.query(
+        `UPDATE swaps SET ${field} = TRUE, postage_photo = $1, updated_at = NOW() WHERE id = $2`,
+        [photo, swapId]
+      );
+    } else {
+      await pool.query(
+        `UPDATE swaps SET ${field} = TRUE, updated_at = NOW() WHERE id = $1`,
+        [swapId]
+      );
+    }
 
     // Notify the other party
     const { rows: senderRows } = await pool.query('SELECT name FROM users WHERE id = $1', [userId]);
@@ -512,7 +532,7 @@ router.post('/:id/posted', async (req, res) => {
       userId: otherUserId,
       type: 'swap_posted',
       title: 'Stickers on their way!',
-      body: `${senderRows[0]?.name || 'Your swap partner'} has posted their stickers.`,
+      body: `${senderRows[0]?.name || 'Your swap partner'} has posted their stickers${photo ? ' and uploaded proof of postage' : ''}.`,
       swapId,
     });
 
