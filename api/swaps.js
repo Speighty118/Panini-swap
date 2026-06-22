@@ -362,13 +362,22 @@ router.post('/:id/accept', async (req, res) => {
 // ----------------------------------------------------------------
 // POST /api/swaps/:id/decline
 // Either side can decline while still in 'proposed' state.
+// Body: { reason? } — optional free-text reason shown to other party.
 // ----------------------------------------------------------------
 router.post('/:id/decline', async (req, res) => {
   const userId = req.user.id;
   const swapId = req.params.id;
+  const { reason } = req.body;
 
   try {
-    const { rows } = await pool.query(`SELECT * FROM swaps WHERE id = $1`, [swapId]);
+    const { rows } = await pool.query(
+      `SELECT s.*, ua.name AS user_a_name, ub.name AS user_b_name
+       FROM swaps s
+       JOIN users ua ON ua.id = s.user_a_id
+       JOIN users ub ON ub.id = s.user_b_id
+       WHERE s.id = $1`,
+      [swapId]
+    );
     const swap = rows[0];
     if (!swap) return res.status(404).json({ error: 'Swap not found' });
     if (swap.user_a_id !== userId && swap.user_b_id !== userId) {
@@ -378,10 +387,28 @@ router.post('/:id/decline', async (req, res) => {
       return res.status(400).json({ error: 'Swap already past the proposal stage' });
     }
 
+    const declinerName = userId === swap.user_a_id ? swap.user_a_name : swap.user_b_name;
+    const otherUserId = userId === swap.user_a_id ? swap.user_b_id : swap.user_a_id;
+
     await pool.query(
-      `UPDATE swaps SET status = 'declined', updated_at = NOW() WHERE id = $1`,
-      [swapId]
+      `UPDATE swaps
+       SET status = 'declined', updated_at = NOW(),
+           declined_by_id = $1, decline_reason = $2
+       WHERE id = $3`,
+      [userId, reason?.trim() || null, swapId]
     );
+
+    // Notify the other party with the reason if one was given
+    const notifBody = reason?.trim()
+      ? `${declinerName} declined your swap and said: "${reason.trim()}"`
+      : `${declinerName} has declined your swap proposal.`;
+
+    await pool.query(
+      `INSERT INTO notifications (user_id, type, title, body)
+       VALUES ($1, 'swap_declined', $2, $3)`,
+      [otherUserId, 'Swap declined', notifBody]
+    ).catch(() => {});
+
     res.json({ success: true });
   } catch (err) {
     console.error(err);
