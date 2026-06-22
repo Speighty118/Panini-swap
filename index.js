@@ -25,6 +25,7 @@ const messageRoutes = require('./api/messages');
 const { router: notificationRoutes } = require('./api/notifications');
 const inviteRoutes = require('./api/invites');
 const feedbackRoutes = require('./api/feedback');
+const donationRoutes = require('./api/donations');
 const { runMatchingJob } = require('./jobs/run_matching');
 
 const app = express();
@@ -98,6 +99,7 @@ app.use('/api/disputes', disputeRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/invites', inviteRoutes);
 app.use('/api/feedback', feedbackRoutes);
+app.use('/api/donations', donationRoutes);
 app.use('/api/admin', adminRoutes);
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
