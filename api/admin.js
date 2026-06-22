@@ -453,6 +453,93 @@ router.get('/dau-chart', async (req, res) => {
 });
 
 // ----------------------------------------------------------------
+// GET /api/admin/health
+// System health checks — detects known failure modes like the
+// LIMIT 100 bug on v_possible_gives, matching job activity, etc.
+// ----------------------------------------------------------------
+router.get('/health', async (req, res) => {
+  const checks = [];
+
+  try {
+    // Check 1: v_possible_gives view definition — must not contain LIMIT
+    const { rows: viewRows } = await pool.query(
+      `SELECT pg_get_viewdef('v_possible_gives', true) AS def`
+    );
+    const viewDef = viewRows[0]?.def || '';
+    const hasLimit = /LIMIT\s+\d+/i.test(viewDef);
+    checks.push({
+      name: 'Matching view (v_possible_gives)',
+      status: hasLimit ? 'error' : 'ok',
+      message: hasLimit
+        ? '⚠️ LIMIT found in view definition — matching will be restricted! Run fix_view.js immediately.'
+        : 'No LIMIT — view is healthy',
+    });
+
+    // Check 2: Total rows in v_possible_gives
+    const { rows: viewCountRows } = await pool.query(
+      `SELECT COUNT(*) AS count FROM v_possible_gives`
+    );
+    const viewCount = parseInt(viewCountRows[0].count);
+    checks.push({
+      name: 'Possible gives (total)',
+      status: viewCount === 0 ? 'warning' : viewCount <= 100 ? 'warning' : 'ok',
+      message: viewCount === 0
+        ? '⚠️ No possible gives found — matching cannot work'
+        : viewCount <= 100
+        ? `⚠️ Only ${viewCount} possible gives — suspiciously low, may indicate a LIMIT bug`
+        : `${viewCount.toLocaleString()} possible gives found`,
+    });
+
+    // Check 3: Users with 0 matches despite having both dupes and needs
+    const { rows: zeroMatchRows } = await pool.query(
+      `SELECT COUNT(*) AS count FROM users u
+       WHERE (SELECT COUNT(*) FROM user_duplicates WHERE user_id = u.id) > 0
+         AND (SELECT COUNT(*) FROM user_needs WHERE user_id = u.id) > 0
+         AND (SELECT COUNT(*) FROM matches WHERE (user_a_id = u.id OR user_b_id = u.id) AND status = 'pending') = 0`
+    );
+    const zeroMatch = parseInt(zeroMatchRows[0].count);
+    checks.push({
+      name: 'Users with stickers but no matches',
+      status: zeroMatch > 5 ? 'warning' : 'ok',
+      message: zeroMatch === 0
+        ? 'All users with stickers have at least one match'
+        : `${zeroMatch} user${zeroMatch > 1 ? 's' : ''} have stickers but no matches — could be normal if new, or may indicate a matching issue`,
+    });
+
+    // Check 4: Matching job last run — check most recent match creation time
+    const { rows: matchTimeRows } = await pool.query(
+      `SELECT MAX(computed_at) AS last_run FROM matches`
+    );
+    const lastRun = matchTimeRows[0]?.last_run;
+    const minutesAgo = lastRun ? Math.round((Date.now() - new Date(lastRun)) / 60000) : null;
+    checks.push({
+      name: 'Matching job last run',
+      status: !lastRun ? 'warning' : minutesAgo > 10 ? 'warning' : 'ok',
+      message: !lastRun
+        ? '⚠️ No matches ever computed — matching job may never have run'
+        : minutesAgo > 10
+        ? `⚠️ Last run ${minutesAgo} minutes ago — matching job may have stopped`
+        : `Running normally — last run ${minutesAgo} minute${minutesAgo !== 1 ? 's' : ''} ago`,
+    });
+
+    // Check 5: Pending matches count
+    const { rows: pendingRows } = await pool.query(
+      `SELECT COUNT(*) AS count FROM matches WHERE status = 'pending'`
+    );
+    checks.push({
+      name: 'Pending matches',
+      status: 'ok',
+      message: `${parseInt(pendingRows[0].count).toLocaleString()} pending matches across all users`,
+    });
+
+    res.json({ checks, checkedAt: new Date().toISOString() });
+  } catch (err) {
+    console.error('Health check error:', err);
+    res.status(500).json({ error: 'Health check failed', detail: err.message });
+  }
+});
+
+// ----------------------------------------------------------------
 // GET /api/admin/overview
 // High-level platform stats: totals, recent activity.
 // ----------------------------------------------------------------
