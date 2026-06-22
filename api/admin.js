@@ -137,19 +137,7 @@ router.get('/analytics', async (req, res) => {
           ROUND(AVG(sess.session_minutes)::numeric, 1) AS avg_session_minutes,
           COUNT(DISTINCT sess.id) AS total_sessions,
           ROUND(AVG(r.stars)::numeric, 1) AS avg_rating,
-          COUNT(DISTINCT r.id) AS rating_count,
-          (
-            SELECT json_agg(json_build_object(
-              'stars', r2.stars,
-              'comment', r2.comment,
-              'reviewer_name', ru.name,
-              'created_at', r2.created_at
-            ) ORDER BY r2.created_at DESC)
-            FROM ratings r2
-            JOIN users ru ON ru.id = r2.reviewer_id
-            WHERE r2.rated_user_id = u.id
-            LIMIT 5
-          ) AS recent_reviews
+          COUNT(DISTINCT r.id) AS rating_count
        FROM users u
        LEFT JOIN user_duplicates ud ON ud.user_id = u.id
        LEFT JOIN user_needs un ON un.user_id = u.id
@@ -163,10 +151,34 @@ router.get('/analytics', async (req, res) => {
        GROUP BY u.id
        ORDER BY u.last_login_at DESC NULLS LAST`
     );
-    res.json(rows);
+
+    // Fetch reviews separately to avoid subquery issues with json_agg
+    const userIds = rows.map(r => r.id);
+    let reviewsByUser = {};
+    if (userIds.length > 0) {
+      const { rows: reviews } = await pool.query(
+        `SELECT r.rated_user_id, r.stars, r.comment, r.created_at, u.name AS reviewer_name
+         FROM ratings r
+         JOIN users u ON u.id = r.reviewer_id
+         WHERE r.rated_user_id = ANY($1::int[])
+         ORDER BY r.created_at DESC`,
+        [userIds]
+      );
+      reviews.forEach(r => {
+        if (!reviewsByUser[r.rated_user_id]) reviewsByUser[r.rated_user_id] = [];
+        if (reviewsByUser[r.rated_user_id].length < 5) reviewsByUser[r.rated_user_id].push(r);
+      });
+    }
+
+    const result = rows.map(r => ({
+      ...r,
+      recent_reviews: reviewsByUser[r.id] || [],
+    }));
+
+    res.json(result);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to fetch analytics' });
+    console.error('Analytics error:', err);
+    res.status(500).json({ error: 'Failed to fetch analytics', detail: err.message });
   }
 });
 
