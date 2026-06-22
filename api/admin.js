@@ -147,7 +147,7 @@ router.get('/analytics', async (req, res) => {
            EXTRACT(EPOCH FROM (COALESCE(ended_at, last_seen) - started_at)) / 60 AS session_minutes
          FROM user_sessions
        ) sess ON sess.user_id = u.id
-       LEFT JOIN ratings r ON r.rated_user_id = u.id
+       LEFT JOIN ratings r ON r.ratee_id = u.id
        GROUP BY u.id
        ORDER BY u.last_login_at DESC NULLS LAST`
     );
@@ -157,16 +157,16 @@ router.get('/analytics', async (req, res) => {
     let reviewsByUser = {};
     if (userIds.length > 0) {
       const { rows: reviews } = await pool.query(
-        `SELECT r.rated_user_id, r.stars, r.comment, r.created_at, u.name AS reviewer_name
+        `SELECT r.ratee_id, r.stars, r.comment, r.created_at, u.name AS reviewer_name
          FROM ratings r
-         JOIN users u ON u.id = r.reviewer_id
-         WHERE r.rated_user_id = ANY($1::int[])
+         JOIN users u ON u.id = r.rater_id
+         WHERE r.ratee_id = ANY($1::int[])
          ORDER BY r.created_at DESC`,
         [userIds]
       );
       reviews.forEach(r => {
-        if (!reviewsByUser[r.rated_user_id]) reviewsByUser[r.rated_user_id] = [];
-        if (reviewsByUser[r.rated_user_id].length < 5) reviewsByUser[r.rated_user_id].push(r);
+        if (!reviewsByUser[r.ratee_id]) reviewsByUser[r.ratee_id] = [];
+        if (reviewsByUser[r.ratee_id].length < 5) reviewsByUser[r.ratee_id].push(r);
       });
     }
 
