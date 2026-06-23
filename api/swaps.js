@@ -250,7 +250,14 @@ router.post('/', async (req, res) => {
         `INSERT INTO swap_items (swap_id, sticker_id, from_user_id, to_user_id)
          VALUES ($1, $2, $3, $4)`,
         [swap.id, item.sticker_id, item.from_user_id, item.to_user_id]
-      );
+      ).catch(async (err) => {
+        if (err.message?.includes('already committed')) {
+          // Database trigger caught a double-booking — re-throw so the
+          // outer catch handles the rollback cleanly
+          throw Object.assign(new Error('One or more stickers are already committed to another active swap. Please wait for that swap to complete or be declined.'), { doubleBooked: true });
+        }
+        throw err;
+      });
     }
 
     await client.query(
@@ -274,6 +281,9 @@ router.post('/', async (req, res) => {
     res.status(201).json({ swap, items });
   } catch (err) {
     await client.query('ROLLBACK');
+    if (err.doubleBooked) {
+      return res.status(409).json({ error: err.message, doubleBooked: true });
+    }
     console.error(err);
     res.status(500).json({ error: 'Failed to create swap' });
   } finally {
