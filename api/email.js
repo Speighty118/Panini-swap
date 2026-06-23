@@ -56,4 +56,29 @@ async function sendDisputeNotification(toEmail, name, swapId, reason) {
   });
 }
 
-module.exports = { sendVerificationEmail, sendDisputeNotification };
+async function sendPasswordResetEmail(toEmail, name, resetUrl) {
+  return resend.emails.send({
+    from: FROM_EMAIL,
+    to: toEmail,
+    subject: 'Reset your Got One Spare? password',
+    html: `
+      <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
+        <h2 style="color: #0B3D2E;">Reset your password</h2>
+        <p>Hi ${name},</p>
+        <p>We received a request to reset your password. Click the button below to choose a new one.</p>
+        <p>
+          <a href="${resetUrl}" style="background: #1AAB8A; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block;">
+            Reset my password
+          </a>
+        </p>
+        <p style="color: #666; font-size: 13px;">
+          If the button doesn't work, copy and paste this link:<br>
+          ${resetUrl}
+        </p>
+        <p style="color: #999; font-size: 12px;">This link expires in 1 hour. If you didn't request a password reset, you can safely ignore this email.</p>
+      </div>
+    `,
+  });
+}
+
+module.exports = { sendVerificationEmail, sendDisputeNotification, sendPasswordResetEmail };
