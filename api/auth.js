@@ -250,6 +250,34 @@ router.post('/login', async (req, res) => {
 });
 
 // ----------------------------------------------------------------
+// GET /api/auth/search?q=name
+// Search for users by name — for finding swap partners manually.
+// Returns limited public info only.
+// ----------------------------------------------------------------
+router.get('/search', requireAuth, async (req, res) => {
+  const { q } = req.query;
+  if (!q || q.trim().length < 2) return res.json([]);
+  try {
+    const { rows } = await pool.query(
+      `SELECT u.id, u.name, u.city, u.rating_avg, u.rating_count, u.swap_streak,
+              COUNT(DISTINCT s.id) FILTER (WHERE s.status = 'completed') AS completed_swaps,
+              u.response_rate
+       FROM users u
+       LEFT JOIN swaps s ON s.user_a_id = u.id OR s.user_b_id = u.id
+       WHERE u.name ILIKE $1 AND u.is_suspended = FALSE AND u.email_verified = TRUE
+       GROUP BY u.id
+       ORDER BY u.name ASC
+       LIMIT 20`,
+      [`%${q.trim()}%`]
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Search failed' });
+  }
+});
+
+// ----------------------------------------------------------------
 // GET /api/auth/me
 // Returns the logged-in user's own profile (includes address —
 // this is the only endpoint that should return your own address
