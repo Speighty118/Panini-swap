@@ -87,7 +87,8 @@ const generalLimiter = rateLimit({
 });
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 50, // allow more attempts — legitimate users sometimes struggle with passwords
+  max: 100, // generous limit — 100 attempts per 15 min per IP
+  message: { error: 'Too many login attempts from this device. Please wait a few minutes and try again, or switch between WiFi and mobile data.' },
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many attempts, please try again later' },
