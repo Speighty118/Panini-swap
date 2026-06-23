@@ -11,17 +11,6 @@
  * Run: node index.js
  */
 
-// Sentry must be initialised before any other requires
-const Sentry = require('@sentry/node');
-if (process.env.SENTRY_DSN) {
-  Sentry.init({
-    dsn: process.env.SENTRY_DSN,
-    environment: process.env.NODE_ENV || 'production',
-    tracesSampleRate: 0.1,
-  });
-  console.log('Sentry error tracking enabled');
-}
-
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -152,28 +141,18 @@ app.use((req, res) => {
 // ---- Central error handler ----
 // Catches anything thrown/rejected that individual routes didn't
 // already handle, so the process never crashes silently and the
-// Sentry error handler — must be before other error handlers
-if (process.env.SENTRY_DSN) {
-  Sentry.setupExpressErrorHandler(app);
-}
-
-// Global error handler — catches anything that slipped through.
-// Sends to Sentry if configured, then returns a safe error response so the
-// client never sees a raw stack trace.
+// Global error handler
 app.use((err, req, res, next) => {
   console.error('Unhandled error:', err);
-  if (process.env.SENTRY_DSN) Sentry.captureException(err);
   res.status(500).json({ error: 'Something went wrong' });
 });
 
-// Catch unhandled promise rejections and uncaught exceptions
+// Catch unhandled promise rejections
 process.on('unhandledRejection', (reason) => {
   console.error('Unhandled rejection:', reason);
-  if (process.env.SENTRY_DSN) Sentry.captureException(reason);
 });
 process.on('uncaughtException', (err) => {
   console.error('Uncaught exception:', err);
-  if (process.env.SENTRY_DSN) Sentry.captureException(err);
 });
 
 const PORT = process.env.PORT || 3000;
