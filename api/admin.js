@@ -617,6 +617,140 @@ router.get('/fraud-flags', async (req, res) => {
 });
 
 // ----------------------------------------------------------------
+// GET /api/admin/messages
+// All conversations across the platform for admin oversight.
+// ----------------------------------------------------------------
+router.get('/messages', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT
+         c.id AS conversation_id,
+         u1.name AS user_a_name, u1.email AS user_a_email,
+         u2.name AS user_b_name, u2.email AS user_b_email,
+         COUNT(dm.id) AS message_count,
+         COUNT(dm.id) FILTER (WHERE dm.reported) AS reported_count,
+         MAX(dm.created_at) AS last_message_at
+       FROM conversations c
+       JOIN conversation_participants cp1 ON cp1.conversation_id = c.id
+       JOIN conversation_participants cp2 ON cp2.conversation_id = c.id AND cp2.user_id > cp1.user_id
+       JOIN users u1 ON u1.id = cp1.user_id
+       JOIN users u2 ON u2.id = cp2.user_id
+       LEFT JOIN direct_messages dm ON dm.conversation_id = c.id
+       GROUP BY c.id, u1.name, u1.email, u2.name, u2.email
+       ORDER BY last_message_at DESC NULLS LAST`
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch conversations' });
+  }
+});
+
+// ----------------------------------------------------------------
+// GET /api/admin/messages/:conversationId
+// Full message thread for admin review.
+// ----------------------------------------------------------------
+router.get('/messages/:conversationId', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT dm.*, u.name AS sender_name, u.email AS sender_email
+       FROM direct_messages dm
+       JOIN users u ON u.id = dm.sender_id
+       WHERE dm.conversation_id = $1
+       ORDER BY dm.created_at ASC`,
+      [req.params.conversationId]
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch messages' });
+  }
+});
+
+// ----------------------------------------------------------------
+// GET /api/admin/reported-messages
+// All reported messages for moderation.
+// ----------------------------------------------------------------
+router.get('/reported-messages', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT dm.*, u.name AS sender_name, u.email AS sender_email,
+              u2.name AS recipient_name
+       FROM direct_messages dm
+       JOIN users u ON u.id = dm.sender_id
+       JOIN conversation_participants cp ON cp.conversation_id = dm.conversation_id AND cp.user_id != dm.sender_id
+       JOIN users u2 ON u2.id = cp.user_id
+       WHERE dm.reported = TRUE
+       ORDER BY dm.created_at DESC`
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch reported messages' });
+  }
+});
+
+// ----------------------------------------------------------------
+// POST /api/admin/messages/send
+// Admin sends a direct message to any user.
+// ----------------------------------------------------------------
+router.post('/messages/send', async (req, res) => {
+  const { recipientId, body } = req.body;
+  if (!recipientId || !body?.trim()) {
+    return res.status(400).json({ error: 'recipientId and body required' });
+  }
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    // Use a special admin user ID of 0 — or find/create an admin system user
+    // For now, find the first admin-created user or use a placeholder
+    const ADMIN_SENDER_ID = 1; // Use the first user as proxy for admin messages
+
+    const { rows: existing } = await client.query(
+      `SELECT c.id FROM conversations c
+       JOIN conversation_participants cp1 ON cp1.conversation_id = c.id AND cp1.user_id = $1
+       JOIN conversation_participants cp2 ON cp2.conversation_id = c.id AND cp2.user_id = $2`,
+      [ADMIN_SENDER_ID, recipientId]
+    );
+
+    let conversationId;
+    if (existing.length > 0) {
+      conversationId = existing[0].id;
+    } else {
+      const { rows: newConv } = await client.query(
+        `INSERT INTO conversations DEFAULT VALUES RETURNING id`
+      );
+      conversationId = newConv[0].id;
+      await client.query(
+        `INSERT INTO conversation_participants (conversation_id, user_id) VALUES ($1, $2), ($1, $3)`,
+        [conversationId, ADMIN_SENDER_ID, recipientId]
+      );
+    }
+
+    await client.query(
+      `INSERT INTO direct_messages (conversation_id, sender_id, body)
+       VALUES ($1, $2, $3)`,
+      [conversationId, ADMIN_SENDER_ID, body.trim()]
+    );
+
+    await client.query(
+      `INSERT INTO notifications (user_id, type, title, body)
+       VALUES ($1, 'direct_message', 'New message from Got One Spare?', $2)`,
+      [recipientId, body.trim().substring(0, 100)]
+    ).catch(() => {});
+
+    await client.query('COMMIT');
+    res.json({ success: true, conversationId });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error(err);
+    res.status(500).json({ error: 'Failed to send message' });
+  } finally {
+    client.release();
+  }
+});
+
+// ----------------------------------------------------------------
 // GET /api/admin/overview
 // High-level platform stats: totals, recent activity.
 // ----------------------------------------------------------------
