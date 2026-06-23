@@ -19,6 +19,51 @@ const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 router.use(requireAuth);
 
 // ----------------------------------------------------------------
+// GET /api/swaps/preview/:matchId
+// Returns the proposed sticker list for a match WITHOUT creating
+// a swap record. Lets users see what would be swapped before
+// committing to a proposal.
+// ----------------------------------------------------------------
+router.get('/preview/:matchId', async (req, res) => {
+  const userId = req.user.id;
+  const { matchId } = req.params;
+  try {
+    const { rows: matchRows } = await pool.query(
+      `SELECT * FROM matches WHERE id = $1 AND status = 'pending'`,
+      [matchId]
+    );
+    const match = matchRows[0];
+    if (!match) return res.status(404).json({ error: 'Match not found' });
+    if (match.user_a_id !== userId && match.user_b_id !== userId) {
+      return res.status(403).json({ error: 'Not your match' });
+    }
+
+    const { rows: allItems } = await pool.query(
+      `SELECT gi.*, s.sticker_number, s.description, s.team_name
+       FROM get_swap_proposal($1, $2, 5) gi
+       JOIN stickers s ON s.id = gi.sticker_id`,
+      [match.user_a_id, match.user_b_id]
+    );
+
+    const aToB = allItems.filter(i => i.from_user_id === match.user_a_id);
+    const bToA = allItems.filter(i => i.from_user_id === match.user_b_id);
+    const equalCount = Math.min(aToB.length, bToA.length);
+
+    res.json({
+      matchId: match.id,
+      userAId: match.user_a_id,
+      userBId: match.user_b_id,
+      aGivesB: aToB.slice(0, equalCount),
+      bGivesA: bToA.slice(0, equalCount),
+      count: equalCount,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to preview swap' });
+  }
+});
+
+// ----------------------------------------------------------------
 // GET /api/swaps/matches
 // List this user's pending match candidates (not yet a swap).
 // ----------------------------------------------------------------
@@ -53,7 +98,9 @@ router.get('/mine', async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT s.*,
-              u.id AS other_user_id, u.name AS other_user_name
+              u.id AS other_user_id, u.name AS other_user_name,
+              (SELECT COUNT(*) FROM swap_items WHERE swap_id = s.id AND from_user_id = $1) AS you_give_count,
+              (SELECT COUNT(*) FROM swap_items WHERE swap_id = s.id AND to_user_id = $1) AS you_get_count
        FROM swaps s
        JOIN users u ON u.id = CASE WHEN s.user_a_id = $1 THEN s.user_b_id ELSE s.user_a_id END
        WHERE s.user_a_id = $1 OR s.user_b_id = $1
@@ -326,8 +373,16 @@ router.post('/:id/accept', async (req, res) => {
       );
 
       for (const item of items) {
+        // Decrement by 1, not delete entirely — user may have multiple copies.
+        // Only remove the row if this was their last copy.
         await client.query(
-          `DELETE FROM user_duplicates WHERE user_id = $1 AND sticker_id = $2`,
+          `UPDATE user_duplicates SET quantity = quantity - 1
+           WHERE user_id = $1 AND sticker_id = $2`,
+          [item.from_user_id, item.sticker_id]
+        );
+        await client.query(
+          `DELETE FROM user_duplicates
+           WHERE user_id = $1 AND sticker_id = $2 AND quantity <= 0`,
           [item.from_user_id, item.sticker_id]
         );
         await client.query(
