@@ -226,15 +226,16 @@ router.post('/login', async (req, res) => {
     ).catch(() => {});
 
     // Geolocate the IP on login — best-effort, never blocks the response.
-    // Only updates if we don't already have location data for this user.
+    // Stored in geo_* columns, separate from the user's postal address fields.
+    // Only updates if we don't already have geo data for this user.
     const ip = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.ip;
-    if (ip && ip !== '127.0.0.1' && ip !== '::1' && !user.latitude) {
+    if (ip && ip !== '127.0.0.1' && ip !== '::1' && !user.geo_latitude) {
       fetch(`http://ip-api.com/json/${ip}?fields=country,city,lat,lon,status`)
         .then(r => r.json())
         .then(geo => {
           if (geo.status === 'success') {
             pool.query(
-              `UPDATE users SET country = $1, city = $2, latitude = $3, longitude = $4 WHERE id = $5`,
+              `UPDATE users SET geo_country = $1, geo_city = $2, geo_latitude = $3, geo_longitude = $4 WHERE id = $5`,
               [geo.country, geo.city, geo.lat, geo.lon, user.id]
             ).catch(() => {});
           }
