@@ -704,7 +704,7 @@ router.post('/messages/send', async (req, res) => {
     await client.query('BEGIN');
     // Use a special admin user ID of 0 — or find/create an admin system user
     // For now, find the first admin-created user or use a placeholder
-    const ADMIN_SENDER_ID = 1; // Use the first user as proxy for admin messages
+    const ADMIN_SENDER_ID = 121; // "Got One Spare? Support" system account
 
     const { rows: existing } = await client.query(
       `SELECT c.id FROM conversations c
@@ -735,7 +735,7 @@ router.post('/messages/send', async (req, res) => {
 
     await client.query(
       `INSERT INTO notifications (user_id, type, title, body)
-       VALUES ($1, 'direct_message', 'New message from Got One Spare?', $2)`,
+       VALUES ($1, 'direct_message', 'New message from Got One Spare? Support', $2)`,
       [recipientId, body.trim().substring(0, 100)]
     ).catch(() => {});
 
