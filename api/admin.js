@@ -359,14 +359,15 @@ router.get('/zero-stickers', async (req, res) => {
 router.get('/live-locations', async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT u.id, u.name, u.city, u.country, u.latitude, u.longitude,
+      `SELECT u.id, u.name, u.geo_city AS city, u.geo_country AS country,
+              u.geo_latitude AS latitude, u.geo_longitude AS longitude,
               u.last_login_at,
               COUNT(DISTINCT ud.sticker_id) AS duplicates_count,
               COUNT(DISTINCT un.sticker_id) AS needs_count
        FROM users u
        LEFT JOIN user_duplicates ud ON ud.user_id = u.id
        LEFT JOIN user_needs un ON un.user_id = u.id
-       WHERE u.latitude IS NOT NULL
+       WHERE u.geo_latitude IS NOT NULL
          AND u.last_login_at > NOW() - INTERVAL '24 hours'
        GROUP BY u.id
        ORDER BY u.last_login_at DESC`
