@@ -33,6 +33,7 @@ const messagingRoutes = require('./api/messaging');
 const { runMatchingJob } = require('./jobs/run_matching');
 
 const app = express();
+app.set('trust proxy', 1); // Trust Railway's proxy for rate limiting and IP detection
 
 // ---- Security & parsing middleware ----
 app.use(helmet());
