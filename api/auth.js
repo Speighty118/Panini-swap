@@ -10,7 +10,7 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const { Pool } = require('pg');
 const { requireAuth, JWT_SECRET } = require('./middleware/auth');
-const { sendVerificationEmail } = require('./email');
+const { sendVerificationEmail, sendPasswordResetEmail } = require('./email');
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const SALT_ROUNDS = 12;
@@ -275,6 +275,98 @@ router.get('/search', requireAuth, async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Search failed' });
+  }
+});
+
+// ----------------------------------------------------------------
+// POST /api/auth/forgot-password
+// Request a password reset email. Always returns success to prevent
+// email enumeration — even if the email doesn't exist.
+// Body: { email }
+// ----------------------------------------------------------------
+router.post('/forgot-password', async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: 'Email required' });
+
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, name, email FROM users WHERE email = $1`,
+      [email.toLowerCase().trim()]
+    );
+
+    // Always return success to prevent email enumeration
+    if (!rows.length) return res.json({ success: true });
+
+    const user = rows[0];
+    const crypto = require('crypto');
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+    // Invalidate any existing tokens for this user
+    await pool.query(
+      `DELETE FROM password_reset_tokens WHERE user_id = $1`,
+      [user.id]
+    );
+
+    await pool.query(
+      `INSERT INTO password_reset_tokens (user_id, token, expires_at)
+       VALUES ($1, $2, $3)`,
+      [user.id, token, expiresAt]
+    );
+
+    const resetUrl = `${process.env.FRONTEND_URL || 'https://www.gotonespare.com'}/reset-password?token=${token}`;
+    await sendPasswordResetEmail(user.email, user.name, resetUrl);
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Forgot password error:', err);
+    res.status(500).json({ error: 'Failed to send reset email' });
+  }
+});
+
+// ----------------------------------------------------------------
+// POST /api/auth/reset-password
+// Reset the password using a valid token.
+// Body: { token, password }
+// ----------------------------------------------------------------
+router.post('/reset-password', async (req, res) => {
+  const { token, password } = req.body;
+  if (!token || !password) return res.status(400).json({ error: 'Token and password required' });
+  if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
+
+  try {
+    const { rows } = await pool.query(
+      `SELECT prt.*, u.id AS user_id, u.name, u.email
+       FROM password_reset_tokens prt
+       JOIN users u ON u.id = prt.user_id
+       WHERE prt.token = $1
+         AND prt.expires_at > NOW()
+         AND prt.used_at IS NULL`,
+      [token]
+    );
+
+    if (!rows.length) {
+      return res.status(400).json({ error: 'This reset link is invalid or has expired. Please request a new one.' });
+    }
+
+    const resetRecord = rows[0];
+    const bcrypt = require('bcryptjs');
+    const passwordHash = await bcrypt.hash(password, 12);
+
+    await pool.query(
+      `UPDATE users SET password_hash = $1 WHERE id = $2`,
+      [passwordHash, resetRecord.user_id]
+    );
+
+    await pool.query(
+      `UPDATE password_reset_tokens SET used_at = NOW() WHERE token = $1`,
+      [token]
+    );
+
+    res.json({ success: true, message: 'Password updated successfully. You can now log in.' });
+  } catch (err) {
+    console.error('Reset password error:', err);
+    res.status(500).json({ error: 'Failed to reset password' });
   }
 });
 
