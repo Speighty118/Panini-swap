@@ -29,6 +29,7 @@ const donationRoutes = require('./api/donations');
 const badgeRoutes = require('./api/badges');
 const reportRoutes = require('./api/reports');
 const announcementRoutes = require('./api/announcements');
+const messagingRoutes = require('./api/messaging');
 const { runMatchingJob } = require('./jobs/run_matching');
 
 const app = express();
@@ -106,6 +107,7 @@ app.use('/api/donations', donationRoutes);
 app.use('/api/badges', badgeRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/announcements', announcementRoutes);
+app.use('/api/messages', messagingRoutes);
 app.use('/api/admin', adminRoutes);
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
