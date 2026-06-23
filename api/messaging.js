@@ -12,7 +12,11 @@
 const express = require('express');
 const router = express.Router();
 const { Pool } = require('pg');
+const { requireAuth } = require('./middleware/auth');
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+
+// Apply auth to all messaging routes
+router.use(requireAuth);
 
 // ----------------------------------------------------------------
 // GET /api/messages
