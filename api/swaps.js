@@ -194,12 +194,27 @@ router.post('/', async (req, res) => {
     );
 
     // Enforce equal swap: trim both sides to the smaller count so
-    // neither party gives more than they receive. This is the 1-for-1
-    // philosophy — every sticker has equal value regardless of player.
+    // neither party gives more than they receive.
     const aToB = allItems.filter(i => i.from_user_id === match.user_a_id);
     const bToA = allItems.filter(i => i.from_user_id === match.user_b_id);
     const equalCount = Math.min(aToB.length, bToA.length);
     const items = [...aToB.slice(0, equalCount), ...bToA.slice(0, equalCount)];
+
+    // Stale match check: if the current available stickers are significantly
+    // fewer than what the match record promised, the match is out of date.
+    // Mark it stale and tell the user to wait for a fresh one.
+    const MIN_STICKERS = 3;
+    if (equalCount < MIN_STICKERS) {
+      await client.query(
+        `UPDATE matches SET status = 'stale' WHERE id = $1`,
+        [matchId]
+      );
+      await client.query('ROLLBACK');
+      return res.status(409).json({
+        error: 'This match is no longer valid — sticker availability has changed since it was created. It has been refreshed and a new match will appear within a minute.',
+        stale: true,
+      });
+    }
 
     // Option B duplicate check: before committing, verify none of these
     // stickers are already part of an active pending/accepted swap for
