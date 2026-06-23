@@ -7,6 +7,8 @@
  */
 
 const jwt = require('jsonwebtoken');
+const { Pool } = require('pg');
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
@@ -23,7 +25,7 @@ function requireAuth(req, res, next) {
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
-    req.user = { id: decoded.userId };
+    req.user = { id: decoded.userId, name: decoded.name || null };
     next();
   } catch (err) {
     return res.status(401).json({ error: 'Invalid or expired token' });
