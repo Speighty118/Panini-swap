@@ -26,6 +26,8 @@ const { router: notificationRoutes } = require('./api/notifications');
 const inviteRoutes = require('./api/invites');
 const feedbackRoutes = require('./api/feedback');
 const donationRoutes = require('./api/donations');
+const badgeRoutes = require('./api/badges');
+const reportRoutes = require('./api/reports');
 const { runMatchingJob } = require('./jobs/run_matching');
 
 const app = express();
@@ -62,7 +64,7 @@ const restrictedCors = cors({
 // Admin-accessible routes (admin.html is a local file with null origin,
 // so these need permissive CORS — all are protected by their own auth).
 const adminCors = cors({ origin: '*' });
-const ADMIN_PATHS = ['/api/admin', '/api/invites', '/api/feedback', '/api/donations'];
+const ADMIN_PATHS = ['/api/admin', '/api/invites', '/api/feedback', '/api/donations', '/api/reports'];
 
 ADMIN_PATHS.forEach(path => app.use(path, adminCors));
 
@@ -100,6 +102,8 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/invites', inviteRoutes);
 app.use('/api/feedback', feedbackRoutes);
 app.use('/api/donations', donationRoutes);
+app.use('/api/badges', badgeRoutes);
+app.use('/api/reports', reportRoutes);
 app.use('/api/admin', adminRoutes);
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
