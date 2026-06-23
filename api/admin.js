@@ -540,6 +540,82 @@ router.get('/health', async (req, res) => {
 });
 
 // ----------------------------------------------------------------
+// POST /api/admin/auto-nudge
+// Send a notification to users who haven't logged in for 7+ days
+// and have stickers listed. Respects last_nudge_at to avoid spam.
+// ----------------------------------------------------------------
+router.post('/auto-nudge', async (req, res) => {
+  try {
+    const { rows: users } = await pool.query(
+      `SELECT u.id, u.name FROM users u
+       WHERE u.last_login_at < NOW() - INTERVAL '7 days'
+         AND (u.last_nudge_at IS NULL OR u.last_nudge_at < NOW() - INTERVAL '7 days')
+         AND u.email_verified = TRUE
+         AND u.is_suspended = FALSE
+         AND (
+           EXISTS (SELECT 1 FROM user_duplicates WHERE user_id = u.id) OR
+           EXISTS (SELECT 1 FROM user_needs WHERE user_id = u.id)
+         )`
+    );
+
+    let sent = 0;
+    for (const user of users) {
+      await pool.query(
+        `INSERT INTO notifications (user_id, type, title, body)
+         VALUES ($1, 'nudge', 'Any new stickers? 👀', 'It''s been a while! Pop back to check your matches — new swap partners may have joined since your last visit.')`,
+        [user.id]
+      );
+      await pool.query(
+        `UPDATE users SET last_nudge_at = NOW() WHERE id = $1`,
+        [user.id]
+      );
+      sent++;
+    }
+
+    res.json({ success: true, sent });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Auto-nudge failed' });
+  }
+});
+
+// ----------------------------------------------------------------
+// GET /api/admin/fraud-flags
+// Users showing suspicious behaviour: accepted swaps but never posted,
+// multiple no-show reports, high dispute rate.
+// ----------------------------------------------------------------
+router.get('/fraud-flags', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT
+         u.id, u.name, u.email, u.created_at,
+         u.times_reported,
+         COUNT(DISTINCT s_stuck.id) AS stuck_accepted_swaps,
+         COUNT(DISTINCT s_disputed.id) AS disputed_swaps,
+         COUNT(DISTINCT nr.id) AS no_show_reports
+       FROM users u
+       LEFT JOIN swaps s_stuck ON (s_stuck.user_a_id = u.id OR s_stuck.user_b_id = u.id)
+         AND s_stuck.status = 'accepted'
+         AND s_stuck.updated_at < NOW() - INTERVAL '7 days'
+       LEFT JOIN swaps s_disputed ON (s_disputed.user_a_id = u.id OR s_disputed.user_b_id = u.id)
+         AND s_disputed.status = 'disputed'
+       LEFT JOIN no_show_reports nr ON nr.reported_user_id = u.id
+       GROUP BY u.id
+       HAVING
+         COUNT(DISTINCT s_stuck.id) > 0 OR
+         COUNT(DISTINCT s_disputed.id) > 1 OR
+         COUNT(DISTINCT nr.id) > 0 OR
+         u.times_reported > 1
+       ORDER BY (COUNT(DISTINCT nr.id) + COUNT(DISTINCT s_disputed.id) + COALESCE(u.times_reported, 0)) DESC`
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch fraud flags' });
+  }
+});
+
+// ----------------------------------------------------------------
 // GET /api/admin/overview
 // High-level platform stats: totals, recent activity.
 // ----------------------------------------------------------------
