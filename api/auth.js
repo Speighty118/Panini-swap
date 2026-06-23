@@ -17,8 +17,8 @@ const SALT_ROUNDS = 12;
 const TOKEN_EXPIRY = '30d';
 const MAX_SIGNUPS_PER_IP_PER_DAY = 5;
 
-function signToken(userId) {
-  return jwt.sign({ userId }, JWT_SECRET, { expiresIn: TOKEN_EXPIRY });
+function signToken(userId, name) {
+  return jwt.sign({ userId, name }, JWT_SECRET, { expiresIn: TOKEN_EXPIRY });
 }
 
 function publicUser(row) {
@@ -100,7 +100,7 @@ router.post('/signup', async (req, res) => {
       ).catch(() => {}); // best-effort
     }
 
-    const token = signToken(user.id);
+    const token = signToken(user.id, user.name);
 
     const verifyUrl = `${process.env.FRONTEND_URL || 'https://panini-swap-frontend.vercel.app'}/verify-email?token=${verificationToken}`;
     try {
@@ -213,7 +213,7 @@ router.post('/login', async (req, res) => {
       return res.status(403).json({ error: 'Your account has been suspended. Contact the group admin for details.' });
     }
 
-    const token = signToken(user.id);
+    const token = signToken(user.id, user.name);
 
     // Track login — update last_login_at, increment login_count, create session record
     await pool.query(
