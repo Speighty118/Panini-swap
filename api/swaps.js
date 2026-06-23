@@ -88,7 +88,35 @@ router.get('/matches', async (req, res) => {
 });
 
 // ----------------------------------------------------------------
-// GET /api/swaps/mine
+// GET /api/swaps/history
+// Completed and declined swaps — the user's swap history.
+// ----------------------------------------------------------------
+router.get('/history', async (req, res) => {
+  const userId = req.user.id;
+  try {
+    const { rows } = await pool.query(
+      `SELECT s.*,
+              u.id AS other_user_id, u.name AS other_user_name,
+              (SELECT COUNT(*) FROM swap_items WHERE swap_id = s.id AND from_user_id = $1) AS you_gave_count,
+              (SELECT COUNT(*) FROM swap_items WHERE swap_id = s.id AND to_user_id = $1) AS you_got_count,
+              r.stars AS your_rating
+       FROM swaps s
+       JOIN users u ON u.id = CASE WHEN s.user_a_id = $1 THEN s.user_b_id ELSE s.user_a_id END
+       LEFT JOIN ratings r ON r.swap_id = s.id AND r.rater_id = $1
+       WHERE (s.user_a_id = $1 OR s.user_b_id = $1)
+         AND s.status IN ('completed', 'declined')
+       ORDER BY s.updated_at DESC`,
+      [userId]
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch swap history' });
+  }
+});
+
+// ----------------------------------------------------------------
+// GET /api/swaps/mines
 // List every swap the logged-in user is part of, any status,
 // most recently updated first — lets someone revisit a past or
 // completed swap once it's no longer on the Matches tab.
@@ -588,6 +616,12 @@ router.post('/:id/posted', async (req, res) => {
       );
     }
 
+    // Award verified postage badge if photo was provided
+    if (photo) {
+      const { awardBadge } = require('./badges');
+      awardBadge(userId, 'verified_postage').catch(() => {});
+    }
+
     // Notify the other party
     const { rows: senderRows } = await pool.query('SELECT name FROM users WHERE id = $1', [userId]);
     const otherUserId = isUserA ? swap.user_b_id : swap.user_a_id;
@@ -672,6 +706,16 @@ router.post('/:id/received', async (req, res) => {
     }
 
     await client.query('COMMIT');
+
+    // Award badges after commit — fire and forget, don't block response
+    if (updated.user_a_received && updated.user_b_received) {
+      const { checkStreakBadges, updateResponseRate } = require('./badges');
+      checkStreakBadges(updated.user_a_id).catch(() => {});
+      checkStreakBadges(updated.user_b_id).catch(() => {});
+      updateResponseRate(updated.user_a_id).catch(() => {});
+      updateResponseRate(updated.user_b_id).catch(() => {});
+    }
+
     res.json({ success: true, completed: updated.user_a_received && updated.user_b_received });
   } catch (err) {
     await client.query('ROLLBACK');
