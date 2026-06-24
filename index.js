@@ -77,20 +77,27 @@ app.use((req, res, next) => {
   restrictedCors(req, res, next);
 });
 
-// Basic rate limiting — protects login/signup from brute force,
-// and protects the whole API from abuse. Tune as the group grows.
+// Basic rate limiting — protects login/signup from brute force.
+// keyGenerator uses the real client IP from X-Forwarded-For, not the proxy IP.
+const realIp = (req) => {
+  const forwarded = req.headers['x-forwarded-for'];
+  return forwarded ? forwarded.split(',')[0].trim() : req.ip;
+};
+
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 300,
+  max: 500,
   standardHeaders: true,
   legacyHeaders: false,
-  skip: (req) => ADMIN_PATHS.some(p => req.path.startsWith(p)), // admin routes don't need rate limiting
+  keyGenerator: realIp,
+  skip: (req) => ADMIN_PATHS.some(p => req.path.startsWith(p)),
 });
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 100,
+  max: 50,
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: realIp,
   message: { error: 'Too many login attempts from this device. Please wait a few minutes and try again, or switch between WiFi and mobile data.' },
 });
 
