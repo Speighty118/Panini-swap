@@ -83,6 +83,30 @@ async function runMatchingJob() {
 
     await client.query('COMMIT');
 
+    // Auto-clean broken proposed swaps — where stickers are no longer in
+    // the giver's duplicates. This runs after every matching cycle so
+    // broken swaps are caught within 1 minute rather than waiting for
+    // user reports.
+    try {
+      const { rowCount } = await pool.query(
+        `UPDATE swaps SET status = 'declined',
+           decline_reason = 'Automatically declined — sticker availability changed since this swap was proposed. A fresh match will be generated shortly.',
+           updated_at = NOW()
+         WHERE status = 'proposed'
+           AND id IN (
+             SELECT DISTINCT s.id FROM swaps s
+             JOIN swap_items si ON si.swap_id = s.id
+             LEFT JOIN user_duplicates ud ON ud.user_id = si.from_user_id AND ud.sticker_id = si.sticker_id
+             WHERE s.status = 'proposed' AND ud.quantity IS NULL
+           )`
+      );
+      if (rowCount > 0) {
+        console.log(`Auto-cleaned ${rowCount} broken proposed swap${rowCount > 1 ? 's' : ''}.`);
+      }
+    } catch (cleanErr) {
+      console.error('Broken swap cleanup error:', cleanErr);
+    }
+
     const duration = Date.now() - startedAt;
     console.log(
       `Matching job complete: ${currentMatches.length} active, ${staleIds.length} marked stale. (${duration}ms)`
