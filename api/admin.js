@@ -124,55 +124,83 @@ router.post('/users/:id/suspend', async (req, res) => {
 // ----------------------------------------------------------------
 router.get('/analytics', async (req, res) => {
   try {
+    // Split into smaller queries to avoid temp disk exhaustion on Railway
     const { rows } = await pool.query(
-      `SELECT
-          u.id, u.name, u.email, u.created_at, u.last_login_at,
-          u.login_count, u.is_suspended, u.email_verified,
-          u.times_reported, u.profile_photo,
-          COUNT(DISTINCT ud.sticker_id) AS duplicates_count,
-          COUNT(DISTINCT un.sticker_id) AS needs_count,
-          COUNT(DISTINCT s.id) AS swaps_count,
-          COUNT(DISTINCT CASE WHEN s.status = 'completed' THEN s.id END) AS completed_swaps,
-          MAX(s.updated_at) AS last_swap_activity,
-          ROUND(AVG(sess.session_minutes)::numeric, 1) AS avg_session_minutes,
-          COUNT(DISTINCT sess.id) AS total_sessions,
-          ROUND(AVG(r.stars)::numeric, 1) AS avg_rating,
-          COUNT(DISTINCT r.id) AS rating_count
+      `SELECT u.id, u.name, u.email, u.created_at, u.last_login_at,
+              u.login_count, u.is_suspended, u.email_verified,
+              u.times_reported, u.profile_photo
        FROM users u
-       LEFT JOIN user_duplicates ud ON ud.user_id = u.id
-       LEFT JOIN user_needs un ON un.user_id = u.id
-       LEFT JOIN swaps s ON (s.user_a_id = u.id OR s.user_b_id = u.id)
-       LEFT JOIN (
-         SELECT user_id, id,
-           EXTRACT(EPOCH FROM (COALESCE(ended_at, last_seen) - started_at)) / 60 AS session_minutes
-         FROM user_sessions
-       ) sess ON sess.user_id = u.id
-       LEFT JOIN ratings r ON r.ratee_id = u.id
-       GROUP BY u.id
        ORDER BY u.last_login_at DESC NULLS LAST`
     );
 
-    // Fetch reviews separately to avoid subquery issues with json_agg
     const userIds = rows.map(r => r.id);
-    let reviewsByUser = {};
-    if (userIds.length > 0) {
-      const { rows: reviews } = await pool.query(
-        `SELECT r.ratee_id, r.stars, r.comment, r.created_at, u.name AS reviewer_name
-         FROM ratings r
-         JOIN users u ON u.id = r.rater_id
-         WHERE r.ratee_id = ANY($1::int[])
-         ORDER BY r.created_at DESC`,
-        [userIds]
-      );
-      reviews.forEach(r => {
-        if (!reviewsByUser[r.ratee_id]) reviewsByUser[r.ratee_id] = [];
-        if (reviewsByUser[r.ratee_id].length < 5) reviewsByUser[r.ratee_id].push(r);
-      });
-    }
+    if (!userIds.length) return res.json([]);
 
-    const result = rows.map(r => ({
-      ...r,
-      recent_reviews: reviewsByUser[r.id] || [],
+    const [stickerRes, swapRes, sessionRes, ratingRes, reviewRes] = await Promise.all([
+      pool.query(
+        `SELECT user_id,
+                COUNT(DISTINCT sticker_id) FILTER (WHERE type = 'dupe') AS duplicates_count,
+                COUNT(DISTINCT sticker_id) FILTER (WHERE type = 'need') AS needs_count
+         FROM (
+           SELECT user_id, sticker_id, 'dupe' AS type FROM user_duplicates WHERE user_id = ANY($1::int[])
+           UNION ALL
+           SELECT user_id, sticker_id, 'need' AS type FROM user_needs WHERE user_id = ANY($1::int[])
+         ) t GROUP BY user_id`,
+        [userIds]
+      ),
+      pool.query(
+        `SELECT u_id, COUNT(*) AS swaps_count,
+                COUNT(*) FILTER (WHERE status = 'completed') AS completed_swaps
+         FROM (
+           SELECT user_a_id AS u_id, status FROM swaps WHERE user_a_id = ANY($1::int[])
+           UNION ALL
+           SELECT user_b_id AS u_id, status FROM swaps WHERE user_b_id = ANY($1::int[])
+         ) t GROUP BY u_id`,
+        [userIds]
+      ),
+      pool.query(
+        `SELECT user_id,
+                COUNT(*) AS total_sessions,
+                ROUND(AVG(EXTRACT(EPOCH FROM (COALESCE(ended_at, last_seen) - started_at)) / 60)::numeric, 1) AS avg_session_minutes
+         FROM user_sessions WHERE user_id = ANY($1::int[])
+         GROUP BY user_id`,
+        [userIds]
+      ),
+      pool.query(
+        `SELECT ratee_id, ROUND(AVG(stars)::numeric, 1) AS avg_rating, COUNT(*) AS rating_count
+         FROM ratings WHERE ratee_id = ANY($1::int[]) GROUP BY ratee_id`,
+        [userIds]
+      ),
+      pool.query(
+        `SELECT r.ratee_id, r.stars, r.comment, r.created_at, u.name AS reviewer_name
+         FROM ratings r JOIN users u ON u.id = r.rater_id
+         WHERE r.ratee_id = ANY($1::int[]) ORDER BY r.created_at DESC`,
+        [userIds]
+      ),
+    ]);
+
+    // Build lookup maps
+    const stickers = Object.fromEntries(stickerRes.rows.map(r => [r.user_id, r]));
+    const swaps = Object.fromEntries(swapRes.rows.map(r => [r.u_id, r]));
+    const sessions = Object.fromEntries(sessionRes.rows.map(r => [r.user_id, r]));
+    const ratings = Object.fromEntries(ratingRes.rows.map(r => [r.ratee_id, r]));
+    const reviewsByUser = {};
+    reviewRes.rows.forEach(r => {
+      if (!reviewsByUser[r.ratee_id]) reviewsByUser[r.ratee_id] = [];
+      if (reviewsByUser[r.ratee_id].length < 5) reviewsByUser[r.ratee_id].push(r);
+    });
+
+    const result = rows.map(u => ({
+      ...u,
+      duplicates_count: stickers[u.id]?.duplicates_count || 0,
+      needs_count: stickers[u.id]?.needs_count || 0,
+      swaps_count: swaps[u.id]?.swaps_count || 0,
+      completed_swaps: swaps[u.id]?.completed_swaps || 0,
+      total_sessions: sessions[u.id]?.total_sessions || 0,
+      avg_session_minutes: sessions[u.id]?.avg_session_minutes || null,
+      avg_rating: ratings[u.id]?.avg_rating || null,
+      rating_count: ratings[u.id]?.rating_count || 0,
+      recent_reviews: reviewsByUser[u.id] || [],
     }));
 
     res.json(result);
