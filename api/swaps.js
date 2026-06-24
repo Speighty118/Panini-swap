@@ -145,8 +145,11 @@ router.get('/mine', async (req, res) => {
 // ----------------------------------------------------------------
 // POST /api/swaps
 // Create a swap proposal from a match. Body: { matchId }
-// Pulls the actual sticker list via get_swap_proposal() and
-// inserts swap + swap_items rows.
+// IMPORTANT: swap_items are NOT created here — they are only
+// created at accept time when both sides confirm, using the
+// sticker availability at that exact moment. This prevents the
+// "stickers no longer available" error caused by stickers being
+// committed to other swaps between proposal and acceptance.
 // ----------------------------------------------------------------
 router.post('/', async (req, res) => {
   const userId = req.user.id;
@@ -180,6 +183,28 @@ router.post('/', async (req, res) => {
       return res.status(403).json({ error: 'Not your match' });
     }
 
+    // Quick stale check — verify there are still enough stickers available
+    // before creating the proposal. We don't lock them in yet.
+    const { rows: allItems } = await client.query(
+      `SELECT * FROM get_swap_proposal($1, $2, 5)`,
+      [match.user_a_id, match.user_b_id]
+    );
+    const aToB = allItems.filter(i => i.from_user_id === match.user_a_id);
+    const bToA = allItems.filter(i => i.from_user_id === match.user_b_id);
+    const equalCount = Math.min(aToB.length, bToA.length);
+    const MIN_STICKERS = 3;
+
+    if (equalCount < MIN_STICKERS) {
+      await client.query(`UPDATE matches SET status = 'stale' WHERE id = $1`, [matchId]);
+      await client.query('ROLLBACK');
+      return res.status(409).json({
+        error: 'This match is no longer valid — sticker availability has changed. It has been refreshed and a new match will appear within a minute.',
+        stale: true,
+      });
+    }
+
+    // Create the swap record only — NO swap_items yet.
+    // Stickers will be calculated and locked in at accept time.
     const { rows: swapRows } = await client.query(
       `INSERT INTO swaps (user_a_id, user_b_id, status)
        VALUES ($1, $2, 'proposed')
@@ -188,78 +213,6 @@ router.post('/', async (req, res) => {
     );
     const swap = swapRows[0];
 
-    const { rows: allItems } = await client.query(
-      `SELECT * FROM get_swap_proposal($1, $2, 5)`,
-      [match.user_a_id, match.user_b_id]
-    );
-
-    // Enforce equal swap: trim both sides to the smaller count so
-    // neither party gives more than they receive.
-    const aToB = allItems.filter(i => i.from_user_id === match.user_a_id);
-    const bToA = allItems.filter(i => i.from_user_id === match.user_b_id);
-    const equalCount = Math.min(aToB.length, bToA.length);
-    const items = [...aToB.slice(0, equalCount), ...bToA.slice(0, equalCount)];
-
-    // Stale match check: if the current available stickers are significantly
-    // fewer than what the match record promised, the match is out of date.
-    // Mark it stale and tell the user to wait for a fresh one.
-    const MIN_STICKERS = 3;
-    if (equalCount < MIN_STICKERS) {
-      await client.query(
-        `UPDATE matches SET status = 'stale' WHERE id = $1`,
-        [matchId]
-      );
-      await client.query('ROLLBACK');
-      return res.status(409).json({
-        error: 'This match is no longer valid — sticker availability has changed since it was created. It has been refreshed and a new match will appear within a minute.',
-        stale: true,
-      });
-    }
-
-    // Option B duplicate check: before committing, verify none of these
-    // stickers are already part of an active pending/accepted swap for
-    // EITHER user — not just the proposer. This prevents both sides from
-    // accidentally double-promising the same sticker.
-    const proposalStickerIds = items.map(i => i.sticker_id);
-    if (proposalStickerIds.length > 0) {
-      const { rows: conflicts } = await client.query(
-        `SELECT si.sticker_id, s.sticker_number, s.description,
-                sw.id AS conflicting_swap_id,
-                si.from_user_id AS committed_by
-         FROM swap_items si
-         JOIN swaps sw ON sw.id = si.swap_id
-         JOIN stickers s ON s.id = si.sticker_id
-         WHERE sw.status IN ('proposed', 'accepted')
-           AND sw.id != $1
-           AND si.sticker_id = ANY($2::int[])
-           AND si.from_user_id IN ($3, $4)`,
-        [swap.id, proposalStickerIds, match.user_a_id, match.user_b_id]
-      );
-      if (conflicts.length > 0) {
-        await client.query('ROLLBACK');
-        const names = conflicts.map(c => `${c.sticker_number} (${c.description})`).join(', ');
-        return res.status(409).json({
-          error: `Some stickers in this swap are already committed to another pending swap: ${names}. The existing swap needs to be accepted or declined before a new one can be proposed with the same stickers.`,
-          conflicts: conflicts.map(c => ({ stickerId: c.sticker_id, swapId: c.conflicting_swap_id })),
-        });
-      }
-    }
-
-    for (const item of items) {
-      await client.query(
-        `INSERT INTO swap_items (swap_id, sticker_id, from_user_id, to_user_id)
-         VALUES ($1, $2, $3, $4)`,
-        [swap.id, item.sticker_id, item.from_user_id, item.to_user_id]
-      ).catch(async (err) => {
-        if (err.message?.includes('already committed')) {
-          // Database trigger caught a double-booking — re-throw so the
-          // outer catch handles the rollback cleanly
-          throw Object.assign(new Error('One or more stickers are already committed to another active swap. Please wait for that swap to complete or be declined.'), { doubleBooked: true });
-        }
-        throw err;
-      });
-    }
-
     await client.query(
       `UPDATE matches SET status = 'proposed' WHERE id = $1`,
       [matchId]
@@ -267,7 +220,7 @@ router.post('/', async (req, res) => {
 
     await client.query('COMMIT');
 
-    // Notify the other party that a swap has been proposed
+    // Notify the other party
     const { rows: proposerRows } = await pool.query('SELECT name FROM users WHERE id = $1', [userId]);
     const otherUserId = swap.user_a_id === userId ? swap.user_b_id : swap.user_a_id;
     await createNotification(pool, {
@@ -278,12 +231,9 @@ router.post('/', async (req, res) => {
       swapId: swap.id,
     });
 
-    res.status(201).json({ swap, items });
+    res.status(201).json({ swap, items: [] });
   } catch (err) {
     await client.query('ROLLBACK');
-    if (err.doubleBooked) {
-      return res.status(409).json({ error: err.message, doubleBooked: true });
-    }
     console.error(err);
     res.status(500).json({ error: 'Failed to create swap' });
   } finally {
@@ -341,8 +291,10 @@ router.get('/:id', async (req, res) => {
 
 // ----------------------------------------------------------------
 // POST /api/swaps/:id/accept
-// Mark this user's side as accepted. If both sides have now
-// accepted, flip swap status to 'accepted' (unlocks addresses).
+// Mark this user's side as accepted. When BOTH sides have accepted,
+// the sticker list is calculated from current availability RIGHT NOW
+// and locked in. This is the architectural fix — stickers are never
+// committed until both parties have confirmed.
 // ----------------------------------------------------------------
 router.post('/:id/accept', async (req, res) => {
   const userId = req.user.id;
@@ -366,55 +318,7 @@ router.post('/:id/accept', async (req, res) => {
     const isUserA = swap.user_a_id === userId;
     const field = isUserA ? 'user_a_accepted' : 'user_b_accepted';
 
-    // Before accepting, verify this user still actually has all the
-    // stickers they're supposed to give. If any have already been
-    // committed to another accepted swap (and therefore removed from
-    // user_duplicates), block the acceptance with a clear message
-    // rather than letting them over-promise.
-    const { rows: itemsToGive } = await client.query(
-      `SELECT si.sticker_id, s.sticker_number, s.description
-       FROM swap_items si
-       JOIN stickers s ON s.id = si.sticker_id
-       WHERE si.swap_id = $1 AND si.from_user_id = $2`,
-      [swapId, userId]
-    );
-
-    const missingStickers = [];
-    for (const item of itemsToGive) {
-      const { rows: dupeRows } = await client.query(
-        `SELECT 1 FROM user_duplicates WHERE user_id = $1 AND sticker_id = $2`,
-        [userId, item.sticker_id]
-      );
-      if (!dupeRows.length) {
-        missingStickers.push(`${item.sticker_number} (${item.description})`);
-      }
-    }
-
-    if (missingStickers.length > 0) {
-      // Auto-decline the broken swap — stickers are no longer available.
-      // This is cleaner than leaving users stuck with an unacceptable swap.
-      await client.query(
-        `UPDATE swaps SET status = 'declined',
-         decline_reason = 'Automatically declined — some stickers were no longer available. A fresh match will be generated shortly.',
-         updated_at = NOW() WHERE id = $1`,
-        [swapId]
-      );
-      await client.query('COMMIT');
-
-      // Notify the other party too
-      const otherUserId = swap.user_a_id === userId ? swap.user_b_id : swap.user_a_id;
-      await pool.query(
-        `INSERT INTO notifications (user_id, type, title, body)
-         VALUES ($1, 'swap_declined', 'Swap no longer available', 'A swap proposal has been automatically cancelled because some stickers were no longer available. A fresh match will appear in your Matches tab shortly.')`,
-        [otherUserId]
-      ).catch(() => {});
-
-      return res.status(409).json({
-        error: 'This swap is no longer available — some stickers have been committed elsewhere. The swap has been automatically cancelled and a fresh match will appear in your Matches tab within a minute.',
-        autoDeclined: true,
-      });
-    }
-
+    // Mark this user's side as accepted
     await client.query(
       `UPDATE swaps SET ${field} = TRUE, updated_at = NOW() WHERE id = $1`,
       [swapId]
@@ -423,36 +327,69 @@ router.post('/:id/accept', async (req, res) => {
     const { rows: updatedRows } = await client.query(`SELECT * FROM swaps WHERE id = $1`, [swapId]);
     const updated = updatedRows[0];
 
+    // If both sides have now accepted, calculate the sticker list RIGHT NOW
+    // from current availability and lock it in. This is the key architectural
+    // change — stickers are only committed when both parties confirm.
     if (updated.user_a_accepted && updated.user_b_accepted && updated.status === 'proposed') {
+
+      // Get current available stickers for this pair
+      const { rows: allItems } = await client.query(
+        `SELECT * FROM get_swap_proposal($1, $2, 5)`,
+        [updated.user_a_id, updated.user_b_id]
+      );
+
+      const aToB = allItems.filter(i => i.from_user_id === updated.user_a_id);
+      const bToA = allItems.filter(i => i.from_user_id === updated.user_b_id);
+      const equalCount = Math.min(aToB.length, bToA.length);
+      const items = [...aToB.slice(0, equalCount), ...bToA.slice(0, equalCount)];
+
+      // If stickers are no longer available, auto-decline gracefully
+      if (equalCount < 3) {
+        await client.query(
+          `UPDATE swaps SET status = 'declined',
+           decline_reason = 'Automatically declined — stickers were no longer available when both parties accepted. A fresh match will be generated shortly.',
+           updated_at = NOW() WHERE id = $1`,
+          [swapId]
+        );
+        await client.query('COMMIT');
+
+        const otherUserId = updated.user_a_id === userId ? updated.user_b_id : updated.user_a_id;
+        await pool.query(
+          `INSERT INTO notifications (user_id, type, title, body)
+           VALUES ($1, 'swap_declined', 'Swap automatically cancelled', 'The stickers for this swap were no longer available. A fresh match will appear in your Matches tab shortly.')`,
+          [otherUserId]
+        ).catch(() => {});
+
+        return res.status(409).json({
+          error: 'This swap has been automatically cancelled — the stickers were no longer available. A fresh match will appear in your Matches tab within a minute.',
+          autoDeclined: true,
+        });
+      }
+
+      // Lock in the sticker list now that both sides have confirmed
+      for (const item of items) {
+        await client.query(
+          `INSERT INTO swap_items (swap_id, sticker_id, from_user_id, to_user_id)
+           VALUES ($1, $2, $3, $4)`,
+          [swapId, item.sticker_id, item.from_user_id, item.to_user_id]
+        );
+      }
+
+      // Mark swap as fully accepted
       await client.query(
         `UPDATE swaps SET status = 'accepted', updated_at = NOW() WHERE id = $1`,
         [swapId]
       );
 
-      // Once both sides have committed, pull the specific stickers in
-      // this swap out of duplicates/needs so they stop being offered
-      // to (or matched against) anyone else. We only remove what's
-      // actually part of THIS swap, not a person's whole inventory —
-      // someone may have other unrelated duplicates/needs for the
-      // same sticker code from a different context, but practically
-      // each sticker_id only ever has one duplicates/needs row per
-      // user, so this is a precise, scoped cleanup either way.
-      const { rows: items } = await client.query(
-        `SELECT sticker_id, from_user_id, to_user_id FROM swap_items WHERE swap_id = $1`,
-        [swapId]
-      );
-
+      // Remove stickers from duplicates/needs now they're committed
       for (const item of items) {
-        // Decrement by 1, not delete entirely — user may have multiple copies.
-        // Only remove the row if this was their last copy.
         await client.query(
           `UPDATE user_duplicates SET quantity = quantity - 1
            WHERE user_id = $1 AND sticker_id = $2`,
           [item.from_user_id, item.sticker_id]
         );
         await client.query(
-          `DELETE FROM user_duplicates
-           WHERE user_id = $1 AND sticker_id = $2 AND quantity <= 0`,
+          `DELETE FROM user_duplicates WHERE user_id = $1 AND sticker_id = $2 AND quantity <= 0`,
           [item.from_user_id, item.sticker_id]
         );
         await client.query(
@@ -461,7 +398,11 @@ router.post('/:id/accept', async (req, res) => {
         );
       }
 
-      // Notify both parties that the swap is fully accepted
+      // Award verified postage badge if applicable
+      const { awardBadge } = require('./badges');
+      awardBadge(userId, 'first_swap').catch(() => {});
+
+      // Notify both parties
       const { rows: userRows } = await pool.query('SELECT name FROM users WHERE id = $1', [userId]);
       const otherUserId = updated.user_a_id === userId ? updated.user_b_id : updated.user_a_id;
       await createNotification(pool, {
@@ -475,14 +416,11 @@ router.post('/:id/accept', async (req, res) => {
 
     await client.query('COMMIT');
 
-    // When both sides accept, immediately mark all other pending matches
-    // for both users as stale. Their stickers are now committed to this swap
-    // so those matches can no longer produce valid proposals.
+    // If fully accepted, mark other pending matches for both users as stale
     if (updated.user_a_accepted && updated.user_b_accepted) {
       pool.query(
         `UPDATE matches SET status = 'stale'
          WHERE status = 'pending'
-           AND id != (SELECT id FROM matches WHERE (user_a_id = $1 AND user_b_id = $2) OR (user_a_id = $2 AND user_b_id = $1) AND status != 'stale' LIMIT 1)
            AND (user_a_id = $1 OR user_b_id = $1 OR user_a_id = $2 OR user_b_id = $2)`,
         [updated.user_a_id, updated.user_b_id]
       ).catch(() => {});
