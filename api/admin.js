@@ -454,15 +454,39 @@ router.get('/dau-chart', async (req, res) => {
 });
 
 // ----------------------------------------------------------------
+// GET /api/admin/error-log
+// Recent rate limit and error events.
+// ----------------------------------------------------------------
+router.get('/error-log', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT * FROM error_log ORDER BY created_at DESC LIMIT 100`
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch error log' });
+  }
+});
+
+// ----------------------------------------------------------------
 // GET /api/admin/health
-// System health checks — detects known failure modes like the
-// LIMIT 100 bug on v_possible_gives, matching job activity, etc.
+// System health checks — detects known failure modes.
 // ----------------------------------------------------------------
 router.get('/health', async (req, res) => {
   const checks = [];
+  const start = Date.now();
 
   try {
-    // Check 1: v_possible_gives view definition — must not contain LIMIT
+    // Check 1: Database connectivity
+    try {
+      await pool.query('SELECT 1');
+      checks.push({ name: 'Database connection', status: 'ok', message: 'Connected successfully' });
+    } catch (err) {
+      checks.push({ name: 'Database connection', status: 'error', message: `❌ Database unreachable: ${err.message}` });
+    }
+
+    // Check 2: v_possible_gives view — must not contain LIMIT
     const { rows: viewRows } = await pool.query(
       `SELECT pg_get_viewdef('v_possible_gives', true) AS def`
     );
@@ -472,26 +496,36 @@ router.get('/health', async (req, res) => {
       name: 'Matching view (v_possible_gives)',
       status: hasLimit ? 'error' : 'ok',
       message: hasLimit
-        ? '⚠️ LIMIT found in view definition — matching will be restricted! Run fix_view.js immediately.'
+        ? '🚨 LIMIT found in view — matching is broken! Run fix_view.js immediately.'
         : 'No LIMIT — view is healthy',
     });
 
-    // Check 2: Total rows in v_possible_gives
-    const { rows: viewCountRows } = await pool.query(
-      `SELECT COUNT(*) AS count FROM v_possible_gives`
-    );
+    // Check 3: Total rows in v_possible_gives
+    const { rows: viewCountRows } = await pool.query(`SELECT COUNT(*) AS count FROM v_possible_gives`);
     const viewCount = parseInt(viewCountRows[0].count);
     checks.push({
       name: 'Possible gives (total)',
-      status: viewCount === 0 ? 'warning' : viewCount <= 100 ? 'warning' : 'ok',
+      status: viewCount === 0 ? 'error' : viewCount <= 100 ? 'warning' : 'ok',
       message: viewCount === 0
-        ? '⚠️ No possible gives found — matching cannot work'
+        ? '🚨 No possible gives — matching cannot work'
         : viewCount <= 100
-        ? `⚠️ Only ${viewCount} possible gives — suspiciously low, may indicate a LIMIT bug`
-        : `${viewCount.toLocaleString()} possible gives found`,
+        ? `⚠️ Only ${viewCount} — suspiciously low, may indicate a LIMIT bug`
+        : `${viewCount.toLocaleString()} possible gives`,
     });
 
-    // Check 3: Users with 0 matches despite having both dupes and needs
+    // Check 4: Double-booking trigger exists
+    const { rows: triggerRows } = await pool.query(
+      `SELECT 1 FROM pg_trigger WHERE tgname = 'trg_check_double_booking'`
+    );
+    checks.push({
+      name: 'Double-booking protection trigger',
+      status: triggerRows.length ? 'ok' : 'error',
+      message: triggerRows.length
+        ? 'Trigger active — double bookings prevented at database level'
+        : '🚨 Trigger missing — run fix_constraint.js immediately!',
+    });
+
+    // Check 5: Users with stickers but no matches
     const { rows: zeroMatchRows } = await pool.query(
       `SELECT COUNT(*) AS count FROM users u
        WHERE (SELECT COUNT(*) FROM user_duplicates WHERE user_id = u.id) > 0
@@ -501,39 +535,89 @@ router.get('/health', async (req, res) => {
     const zeroMatch = parseInt(zeroMatchRows[0].count);
     checks.push({
       name: 'Users with stickers but no matches',
-      status: zeroMatch > 5 ? 'warning' : 'ok',
+      status: zeroMatch > 10 ? 'warning' : 'ok',
       message: zeroMatch === 0
-        ? 'All users with stickers have at least one match'
-        : `${zeroMatch} user${zeroMatch > 1 ? 's' : ''} have stickers but no matches — could be normal if new, or may indicate a matching issue`,
+        ? 'All users with stickers have matches'
+        : `${zeroMatch} user${zeroMatch > 1 ? 's' : ''} have stickers but no matches`,
     });
 
-    // Check 4: Matching job last run — check most recent match creation time
-    const { rows: matchTimeRows } = await pool.query(
-      `SELECT MAX(computed_at) AS last_run FROM matches`
-    );
+    // Check 6: Matching job last run
+    const { rows: matchTimeRows } = await pool.query(`SELECT MAX(computed_at) AS last_run FROM matches`);
     const lastRun = matchTimeRows[0]?.last_run;
     const minutesAgo = lastRun ? Math.round((Date.now() - new Date(lastRun)) / 60000) : null;
     checks.push({
       name: 'Matching job last run',
       status: !lastRun ? 'warning' : minutesAgo > 10 ? 'warning' : 'ok',
       message: !lastRun
-        ? '⚠️ No matches ever computed — matching job may never have run'
+        ? '⚠️ No matches ever computed'
         : minutesAgo > 10
-        ? `⚠️ Last run ${minutesAgo} minutes ago — matching job may have stopped`
+        ? `⚠️ Last run ${minutesAgo} minutes ago — may have stopped`
         : `Running normally — last run ${minutesAgo} minute${minutesAgo !== 1 ? 's' : ''} ago`,
     });
 
-    // Check 5: Pending matches count
-    const { rows: pendingRows } = await pool.query(
-      `SELECT COUNT(*) AS count FROM matches WHERE status = 'pending'`
+    // Check 7: Broken proposed swaps (stickers missing from duplicates)
+    const { rows: brokenRows } = await pool.query(
+      `SELECT COUNT(DISTINCT s.id) AS count
+       FROM swaps s
+       JOIN swap_items si ON si.swap_id = s.id
+       LEFT JOIN user_duplicates ud ON ud.user_id = si.from_user_id AND ud.sticker_id = si.sticker_id
+       WHERE s.status = 'proposed' AND ud.quantity IS NULL`
     );
+    const brokenCount = parseInt(brokenRows[0].count);
+    checks.push({
+      name: 'Broken proposed swaps',
+      status: brokenCount > 0 ? 'error' : 'ok',
+      message: brokenCount === 0
+        ? 'No broken swaps detected'
+        : `🚨 ${brokenCount} proposed swap${brokenCount > 1 ? 's' : ''} have missing stickers — users will get accept errors!`,
+    });
+
+    // Check 8: Pending matches count
+    const { rows: pendingRows } = await pool.query(`SELECT COUNT(*) AS count FROM matches WHERE status = 'pending'`);
     checks.push({
       name: 'Pending matches',
       status: 'ok',
       message: `${parseInt(pendingRows[0].count).toLocaleString()} pending matches across all users`,
     });
 
-    res.json({ checks, checkedAt: new Date().toISOString() });
+    // Check 9: Recent 500 errors (check if any swap proposals failed in last hour)
+    const { rows: recentSwapFails } = await pool.query(
+      `SELECT COUNT(*) AS count FROM swaps WHERE status = 'declined' AND decline_reason LIKE 'Automatically declined%' AND updated_at > NOW() - INTERVAL '1 hour'`
+    );
+    const autoDeclined = parseInt(recentSwapFails[0].count);
+    checks.push({
+      name: 'Auto-declined swaps (last hour)',
+      status: autoDeclined > 5 ? 'warning' : 'ok',
+      message: autoDeclined === 0
+        ? 'No auto-declined swaps in the last hour'
+        : `${autoDeclined} swap${autoDeclined > 1 ? 's' : ''} auto-declined due to stale data in the last hour`,
+    });
+
+    // Check 10: Recent login rate limit hits (last hour)
+    const { rows: rateLimitRows } = await pool.query(
+      `SELECT COUNT(*) AS count, COUNT(DISTINCT ip) AS unique_ips
+       FROM error_log
+       WHERE type = 'rate_limit' AND path LIKE '%/auth%' AND created_at > NOW() - INTERVAL '1 hour'`
+    );
+    const loginErrors = parseInt(rateLimitRows[0].count);
+    const uniqueIps = parseInt(rateLimitRows[0].unique_ips);
+    checks.push({
+      name: 'Login errors (429s) — last hour',
+      status: loginErrors > 20 ? 'error' : loginErrors > 5 ? 'warning' : 'ok',
+      message: loginErrors === 0
+        ? 'No login rate limit errors in the last hour ✓'
+        : `${loginErrors} rate limit hit${loginErrors > 1 ? 's' : ''} from ${uniqueIps} unique IP${uniqueIps > 1 ? 's' : ''} — ${loginErrors > 20 ? 'widespread issue, check rate limit config' : 'normal level'}`,
+    });
+
+    const overallStatus = checks.some(c => c.status === 'error') ? 'error'
+      : checks.some(c => c.status === 'warning') ? 'warning' : 'ok';
+
+    res.json({
+      checks,
+      overallStatus,
+      checkedAt: new Date().toISOString(),
+      responseMs: Date.now() - start,
+    });
   } catch (err) {
     console.error('Health check error:', err);
     res.status(500).json({ error: 'Health check failed', detail: err.message });
