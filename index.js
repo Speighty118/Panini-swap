@@ -80,18 +80,18 @@ app.use((req, res, next) => {
 // Basic rate limiting — protects login/signup from brute force,
 // and protects the whole API from abuse. Tune as the group grows.
 const generalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 min
+  windowMs: 15 * 60 * 1000,
   max: 300,
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => ADMIN_PATHS.some(p => req.path.startsWith(p)), // admin routes don't need rate limiting
 });
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 100, // generous limit — 100 attempts per 15 min per IP
-  message: { error: 'Too many login attempts from this device. Please wait a few minutes and try again, or switch between WiFi and mobile data.' },
+  max: 100,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: 'Too many attempts, please try again later' },
+  message: { error: 'Too many login attempts from this device. Please wait a few minutes and try again, or switch between WiFi and mobile data.' },
 });
 
 app.use(generalLimiter);
