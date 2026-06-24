@@ -474,6 +474,20 @@ router.post('/:id/accept', async (req, res) => {
     }
 
     await client.query('COMMIT');
+
+    // When both sides accept, immediately mark all other pending matches
+    // for both users as stale. Their stickers are now committed to this swap
+    // so those matches can no longer produce valid proposals.
+    if (updated.user_a_accepted && updated.user_b_accepted) {
+      pool.query(
+        `UPDATE matches SET status = 'stale'
+         WHERE status = 'pending'
+           AND id != (SELECT id FROM matches WHERE (user_a_id = $1 AND user_b_id = $2) OR (user_a_id = $2 AND user_b_id = $1) AND status != 'stale' LIMIT 1)
+           AND (user_a_id = $1 OR user_b_id = $1 OR user_a_id = $2 OR user_b_id = $2)`,
+        [updated.user_a_id, updated.user_b_id]
+      ).catch(() => {});
+    }
+
     res.json({ success: true });
   } catch (err) {
     await client.query('ROLLBACK');
