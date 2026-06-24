@@ -56,6 +56,7 @@ router.get('/preview/:matchId', async (req, res) => {
       aGivesB: aToB.slice(0, equalCount),
       bGivesA: bToA.slice(0, equalCount),
       count: equalCount,
+      predictedCount: equalCount,
     });
   } catch (err) {
     console.error(err);
@@ -127,8 +128,16 @@ router.get('/mine', async (req, res) => {
     const { rows } = await pool.query(
       `SELECT s.*,
               u.id AS other_user_id, u.name AS other_user_name,
-              (SELECT COUNT(*) FROM swap_items WHERE swap_id = s.id AND from_user_id = $1) AS you_give_count,
-              (SELECT COUNT(*) FROM swap_items WHERE swap_id = s.id AND to_user_id = $1) AS you_get_count
+              COALESCE((SELECT COUNT(*) FROM swap_items WHERE swap_id = s.id AND from_user_id = $1), 0) AS you_give_count,
+              COALESCE((SELECT COUNT(*) FROM swap_items WHERE swap_id = s.id AND to_user_id = $1), 0) AS you_get_count,
+              CASE WHEN (SELECT COUNT(*) FROM swap_items WHERE swap_id = s.id) > 0
+                THEN (SELECT COUNT(*) FROM swap_items WHERE swap_id = s.id AND from_user_id = $1)
+                ELSE s.predicted_count
+              END AS display_give_count,
+              CASE WHEN (SELECT COUNT(*) FROM swap_items WHERE swap_id = s.id) > 0
+                THEN (SELECT COUNT(*) FROM swap_items WHERE swap_id = s.id AND to_user_id = $1)
+                ELSE s.predicted_count
+              END AS display_get_count
        FROM swaps s
        JOIN users u ON u.id = CASE WHEN s.user_a_id = $1 THEN s.user_b_id ELSE s.user_a_id END
        WHERE s.user_a_id = $1 OR s.user_b_id = $1
@@ -145,11 +154,10 @@ router.get('/mine', async (req, res) => {
 // ----------------------------------------------------------------
 // POST /api/swaps
 // Create a swap proposal from a match. Body: { matchId }
-// IMPORTANT: swap_items are NOT created here — they are only
-// created at accept time when both sides confirm, using the
-// sticker availability at that exact moment. This prevents the
-// "stickers no longer available" error caused by stickers being
-// committed to other swaps between proposal and acceptance.
+// Stickers are locked in at proposal time so users see the exact
+// list. The double-booking trigger prevents the same sticker
+// appearing in two concurrent swaps. When a swap completes, any
+// other proposed swaps containing those stickers are auto-declined.
 // ----------------------------------------------------------------
 router.post('/', async (req, res) => {
   const userId = req.user.id;
@@ -183,8 +191,7 @@ router.post('/', async (req, res) => {
       return res.status(403).json({ error: 'Not your match' });
     }
 
-    // Quick stale check — verify there are still enough stickers available
-    // before creating the proposal. We don't lock them in yet.
+    // Get the current sticker list
     const { rows: allItems } = await client.query(
       `SELECT * FROM get_swap_proposal($1, $2, 5)`,
       [match.user_a_id, match.user_b_id]
@@ -192,8 +199,9 @@ router.post('/', async (req, res) => {
     const aToB = allItems.filter(i => i.from_user_id === match.user_a_id);
     const bToA = allItems.filter(i => i.from_user_id === match.user_b_id);
     const equalCount = Math.min(aToB.length, bToA.length);
-    const MIN_STICKERS = 3;
+    const items = [...aToB.slice(0, equalCount), ...bToA.slice(0, equalCount)];
 
+    const MIN_STICKERS = 3;
     if (equalCount < MIN_STICKERS) {
       await client.query(`UPDATE matches SET status = 'stale' WHERE id = $1`, [matchId]);
       await client.query('ROLLBACK');
@@ -203,21 +211,30 @@ router.post('/', async (req, res) => {
       });
     }
 
-    // Create the swap record only — NO swap_items yet.
-    // Stickers will be calculated and locked in at accept time.
+    // Create the swap record with predicted count for display
     const { rows: swapRows } = await client.query(
-      `INSERT INTO swaps (user_a_id, user_b_id, status)
-       VALUES ($1, $2, 'proposed')
+      `INSERT INTO swaps (user_a_id, user_b_id, status, predicted_count)
+       VALUES ($1, $2, 'proposed', $3)
        RETURNING *`,
-      [match.user_a_id, match.user_b_id]
+      [match.user_a_id, match.user_b_id, equalCount]
     );
     const swap = swapRows[0];
 
-    await client.query(
-      `UPDATE matches SET status = 'proposed' WHERE id = $1`,
-      [matchId]
-    );
+    // Lock in the sticker list immediately so users see the exact stickers
+    for (const item of items) {
+      await client.query(
+        `INSERT INTO swap_items (swap_id, sticker_id, from_user_id, to_user_id)
+         VALUES ($1, $2, $3, $4)`,
+        [swap.id, item.sticker_id, item.from_user_id, item.to_user_id]
+      ).catch(async (err) => {
+        if (err.message?.includes('already committed') || err.code === '23505') {
+          throw Object.assign(new Error('One or more stickers are already committed to another active swap. Please wait for that swap to complete or be declined before proposing a new one.'), { doubleBooked: true });
+        }
+        throw err;
+      });
+    }
 
+    await client.query(`UPDATE matches SET status = 'proposed' WHERE id = $1`, [matchId]);
     await client.query('COMMIT');
 
     // Notify the other party
@@ -231,9 +248,12 @@ router.post('/', async (req, res) => {
       swapId: swap.id,
     });
 
-    res.status(201).json({ swap, items: [] });
+    res.status(201).json({ swap, items });
   } catch (err) {
     await client.query('ROLLBACK');
+    if (err.doubleBooked) {
+      return res.status(409).json({ error: err.message, doubleBooked: true });
+    }
     console.error(err);
     res.status(500).json({ error: 'Failed to create swap' });
   } finally {
@@ -318,6 +338,42 @@ router.post('/:id/accept', async (req, res) => {
     const isUserA = swap.user_a_id === userId;
     const field = isUserA ? 'user_a_accepted' : 'user_b_accepted';
 
+    // Verify this user still has all stickers they need to give.
+    // If any are missing, auto-decline with a friendly message.
+    const { rows: itemsToGive } = await client.query(
+      `SELECT si.sticker_id, s.sticker_number FROM swap_items si
+       JOIN stickers s ON s.id = si.sticker_id
+       WHERE si.swap_id = $1 AND si.from_user_id = $2`,
+      [swapId, userId]
+    );
+
+    for (const item of itemsToGive) {
+      const { rows: dupeRows } = await client.query(
+        `SELECT 1 FROM user_duplicates WHERE user_id = $1 AND sticker_id = $2`,
+        [userId, item.sticker_id]
+      );
+      if (!dupeRows.length) {
+        // Auto-decline cleanly
+        await client.query(
+          `UPDATE swaps SET status = 'declined',
+           decline_reason = 'Automatically declined — some stickers were no longer available. A fresh match will be generated shortly.',
+           updated_at = NOW() WHERE id = $1`,
+          [swapId]
+        );
+        await client.query('COMMIT');
+        const otherUserId = swap.user_a_id === userId ? swap.user_b_id : swap.user_a_id;
+        await pool.query(
+          `INSERT INTO notifications (user_id, type, title, body)
+           VALUES ($1, 'swap_declined', 'Swap automatically cancelled', 'A swap was cancelled because some stickers were no longer available. A fresh match will appear in your Matches tab shortly.')`,
+          [otherUserId]
+        ).catch(() => {});
+        return res.status(409).json({
+          error: 'This swap has been automatically cancelled — some stickers were no longer available. A fresh match will appear in your Matches tab within a minute.',
+          autoDeclined: true,
+        });
+      }
+    }
+
     // Mark this user's side as accepted
     await client.query(
       `UPDATE swaps SET ${field} = TRUE, updated_at = NOW() WHERE id = $1`,
@@ -332,48 +388,11 @@ router.post('/:id/accept', async (req, res) => {
     // change — stickers are only committed when both parties confirm.
     if (updated.user_a_accepted && updated.user_b_accepted && updated.status === 'proposed') {
 
-      // Get current available stickers for this pair
-      const { rows: allItems } = await client.query(
-        `SELECT * FROM get_swap_proposal($1, $2, 5)`,
-        [updated.user_a_id, updated.user_b_id]
+      // Stickers were locked in at proposal time — just fetch and process them
+      const { rows: items } = await client.query(
+        `SELECT sticker_id, from_user_id, to_user_id FROM swap_items WHERE swap_id = $1`,
+        [swapId]
       );
-
-      const aToB = allItems.filter(i => i.from_user_id === updated.user_a_id);
-      const bToA = allItems.filter(i => i.from_user_id === updated.user_b_id);
-      const equalCount = Math.min(aToB.length, bToA.length);
-      const items = [...aToB.slice(0, equalCount), ...bToA.slice(0, equalCount)];
-
-      // If stickers are no longer available, auto-decline gracefully
-      if (equalCount < 3) {
-        await client.query(
-          `UPDATE swaps SET status = 'declined',
-           decline_reason = 'Automatically declined — stickers were no longer available when both parties accepted. A fresh match will be generated shortly.',
-           updated_at = NOW() WHERE id = $1`,
-          [swapId]
-        );
-        await client.query('COMMIT');
-
-        const otherUserId = updated.user_a_id === userId ? updated.user_b_id : updated.user_a_id;
-        await pool.query(
-          `INSERT INTO notifications (user_id, type, title, body)
-           VALUES ($1, 'swap_declined', 'Swap automatically cancelled', 'The stickers for this swap were no longer available. A fresh match will appear in your Matches tab shortly.')`,
-          [otherUserId]
-        ).catch(() => {});
-
-        return res.status(409).json({
-          error: 'This swap has been automatically cancelled — the stickers were no longer available. A fresh match will appear in your Matches tab within a minute.',
-          autoDeclined: true,
-        });
-      }
-
-      // Lock in the sticker list now that both sides have confirmed
-      for (const item of items) {
-        await client.query(
-          `INSERT INTO swap_items (swap_id, sticker_id, from_user_id, to_user_id)
-           VALUES ($1, $2, $3, $4)`,
-          [swapId, item.sticker_id, item.from_user_id, item.to_user_id]
-        );
-      }
 
       // Mark swap as fully accepted
       await client.query(
@@ -382,7 +401,9 @@ router.post('/:id/accept', async (req, res) => {
       );
 
       // Remove stickers from duplicates/needs now they're committed
+      const committedStickerIds = [];
       for (const item of items) {
+        committedStickerIds.push(item.sticker_id);
         await client.query(
           `UPDATE user_duplicates SET quantity = quantity - 1
            WHERE user_id = $1 AND sticker_id = $2`,
@@ -395,6 +416,25 @@ router.post('/:id/accept', async (req, res) => {
         await client.query(
           `DELETE FROM user_needs WHERE user_id = $1 AND sticker_id = $2`,
           [item.to_user_id, item.sticker_id]
+        );
+      }
+
+      // Auto-decline any OTHER proposed swaps that contain the same stickers
+      // now that those stickers have been removed from user_duplicates.
+      // This prevents users from seeing "failed to accept" on other swaps.
+      if (committedStickerIds.length > 0) {
+        await client.query(
+          `UPDATE swaps SET status = 'declined',
+             decline_reason = 'Automatically declined — some stickers were committed to another swap that completed. A fresh match will be generated shortly.',
+             updated_at = NOW()
+           WHERE status = 'proposed'
+             AND id != $1
+             AND id IN (
+               SELECT DISTINCT swap_id FROM swap_items
+               WHERE sticker_id = ANY($2::int[])
+                 AND from_user_id IN ($3, $4)
+             )`,
+          [swapId, committedStickerIds, updated.user_a_id, updated.user_b_id]
         );
       }
 
