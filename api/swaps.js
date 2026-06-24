@@ -391,10 +391,27 @@ router.post('/:id/accept', async (req, res) => {
     }
 
     if (missingStickers.length > 0) {
-      await client.query('ROLLBACK');
+      // Auto-decline the broken swap — stickers are no longer available.
+      // This is cleaner than leaving users stuck with an unacceptable swap.
+      await client.query(
+        `UPDATE swaps SET status = 'declined',
+         decline_reason = 'Automatically declined — some stickers were no longer available. A fresh match will be generated shortly.',
+         updated_at = NOW() WHERE id = $1`,
+        [swapId]
+      );
+      await client.query('COMMIT');
+
+      // Notify the other party too
+      const otherUserId = swap.user_a_id === userId ? swap.user_b_id : swap.user_a_id;
+      await pool.query(
+        `INSERT INTO notifications (user_id, type, title, body)
+         VALUES ($1, 'swap_declined', 'Swap no longer available', 'A swap proposal has been automatically cancelled because some stickers were no longer available. A fresh match will appear in your Matches tab shortly.')`,
+        [otherUserId]
+      ).catch(() => {});
+
       return res.status(409).json({
-        error: `You no longer have all the stickers needed for this swap. The following have already been committed to another accepted swap: ${missingStickers.join(', ')}. Please check your other active swaps.`,
-        missingStickers,
+        error: 'This swap is no longer available — some stickers have been committed elsewhere. The swap has been automatically cancelled and a fresh match will appear in your Matches tab within a minute.',
+        autoDeclined: true,
       });
     }
 
