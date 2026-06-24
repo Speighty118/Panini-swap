@@ -84,6 +84,23 @@ const realIp = (req) => {
   return forwarded ? forwarded.split(',')[0].trim() : req.ip;
 };
 
+// Log rate limit hits to the database so we can monitor them in the health panel
+const { Pool: LogPool } = require('pg');
+const logPool = new LogPool({ connectionString: process.env.DATABASE_URL });
+
+const logRateLimit = (req, res) => {
+  const ip = realIp(req);
+  logPool.query(
+    `INSERT INTO error_log (type, message, ip, path) VALUES ('rate_limit', '429 Too Many Requests', $1, $2)`,
+    [ip, req.path]
+  ).catch(() => {});
+  res.status(429).json({
+    error: req.path.startsWith('/api/auth')
+      ? 'Too many login attempts from this device. Please wait a few minutes and try again, or switch between WiFi and mobile data.'
+      : 'Too many requests. Please slow down and try again shortly.'
+  });
+};
+
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 500,
@@ -91,6 +108,7 @@ const generalLimiter = rateLimit({
   legacyHeaders: false,
   keyGenerator: realIp,
   skip: (req) => ADMIN_PATHS.some(p => req.path.startsWith(p)),
+  handler: logRateLimit,
 });
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -98,7 +116,7 @@ const authLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: realIp,
-  message: { error: 'Too many login attempts from this device. Please wait a few minutes and try again, or switch between WiFi and mobile data.' },
+  handler: logRateLimit,
 });
 
 app.use(generalLimiter);
