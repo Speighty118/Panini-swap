@@ -404,13 +404,17 @@ router.post('/:id/accept', async (req, res) => {
       const committedStickerIds = [];
       for (const item of items) {
         committedStickerIds.push(item.sticker_id);
+        // Delete directly if only 1 copy — avoids the user_duplicates_quantity_check
+        // constraint which prevents quantity going to 0 via UPDATE.
         await client.query(
-          `UPDATE user_duplicates SET quantity = quantity - 1
-           WHERE user_id = $1 AND sticker_id = $2`,
+          `DELETE FROM user_duplicates
+           WHERE user_id = $1 AND sticker_id = $2 AND quantity <= 1`,
           [item.from_user_id, item.sticker_id]
         );
+        // Decrement if they had more than 1 copy
         await client.query(
-          `DELETE FROM user_duplicates WHERE user_id = $1 AND sticker_id = $2 AND quantity <= 0`,
+          `UPDATE user_duplicates SET quantity = quantity - 1
+           WHERE user_id = $1 AND sticker_id = $2 AND quantity > 1`,
           [item.from_user_id, item.sticker_id]
         );
         await client.query(
