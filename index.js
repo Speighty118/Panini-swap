@@ -176,7 +176,65 @@ app.get('/api/stats', async (req, res) => {
   }
 });
 
-// ---- Internal: trigger the matching batch job ----
+// ----------------------------------------------------------------
+// GET /api/activity — recent real platform events for the ticker.
+// Returns the last 20 events across swaps, matches and completions.
+// Results cached for 60 seconds.
+// ----------------------------------------------------------------
+let activityCache = null;
+let activityCacheAt = 0;
+
+app.get('/api/activity', async (req, res) => {
+  if (activityCache && Date.now() - activityCacheAt < STATS_TTL) {
+    return res.json(activityCache);
+  }
+  try {
+    const pool2 = new (require('pg').Pool)({ connectionString: process.env.DATABASE_URL });
+    const { rows } = await pool2.query(`
+      SELECT type, label, happened_at FROM (
+        -- Swap agreed (both accepted)
+        SELECT 'swap_agreed' AS type,
+          CONCAT(ua.name, ' agreed a swap with ', ub.name) AS label,
+          s.updated_at AS happened_at
+        FROM swaps s
+        JOIN users ua ON ua.id = s.user_a_id
+        JOIN users ub ON ub.id = s.user_b_id
+        WHERE s.status IN ('accepted','posted','completed')
+        ORDER BY s.updated_at DESC FETCH FIRST 8 ROWS ONLY
+      ) a
+      UNION ALL SELECT type, label, happened_at FROM (
+        -- Swap completed
+        SELECT 'swap_completed' AS type,
+          CONCAT(ua.name, ' completed a swap with ', ub.name) AS label,
+          s.updated_at AS happened_at
+        FROM swaps s
+        JOIN users ua ON ua.id = s.user_a_id
+        JOIN users ub ON ub.id = s.user_b_id
+        WHERE s.status = 'completed'
+        ORDER BY s.updated_at DESC FETCH FIRST 6 ROWS ONLY
+      ) b
+      UNION ALL SELECT type, label, happened_at FROM (
+        -- New match found
+        SELECT 'match_found' AS type,
+          CONCAT(ua.name, ' matched with ', ub.name, ' on ', LEAST(m.a_gives_b_count, m.b_gives_a_count), ' stickers') AS label,
+          m.computed_at AS happened_at
+        FROM matches m
+        JOIN users ua ON ua.id = m.user_a_id
+        JOIN users ub ON ub.id = m.user_b_id
+        WHERE m.status = 'pending' AND LEAST(m.a_gives_b_count, m.b_gives_a_count) >= 3
+        ORDER BY m.computed_at DESC FETCH FIRST 6 ROWS ONLY
+      ) c
+      ORDER BY happened_at DESC FETCH FIRST 20 ROWS ONLY
+    `);
+    await pool2.end();
+    activityCache = rows;
+    activityCacheAt = Date.now();
+    res.json(rows);
+  } catch (err) {
+    console.error('Activity endpoint error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch activity' });
+  }
+});
 // Called by Railway's HTTP cron on a schedule. Protected by a shared
 // secret passed as a query param, since Railway's simple HTTP cron
 // tool only supports a plain URL (no custom headers).
