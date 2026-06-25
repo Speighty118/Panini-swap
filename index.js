@@ -140,6 +140,42 @@ app.use('/api/admin', adminRoutes);
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 
+// ----------------------------------------------------------------
+// GET /api/stats — public community stats for the homepage banner.
+// Results cached for 60 seconds so rapid polling from many users
+// doesn't hammer the database.
+// ----------------------------------------------------------------
+let statsCache = null;
+let statsCacheAt = 0;
+const STATS_TTL = 60 * 1000; // 60 seconds
+
+app.get('/api/stats', async (req, res) => {
+  if (statsCache && Date.now() - statsCacheAt < STATS_TTL) {
+    return res.json(statsCache);
+  }
+  try {
+    const pool = new (require('pg').Pool)({ connectionString: process.env.DATABASE_URL });
+    const [collectors, swaps, matches, active] = await Promise.all([
+      pool.query(`SELECT COUNT(*) FROM users WHERE email_verified = true`),
+      pool.query(`SELECT COUNT(*) FROM swaps WHERE status IN ('accepted','posted','completed')`),
+      pool.query(`SELECT COUNT(*) FROM matches WHERE status = 'pending'`),
+      pool.query(`SELECT COUNT(DISTINCT user_id) FROM user_sessions WHERE last_seen > NOW() - INTERVAL '7 days'`),
+    ]);
+    await pool.end();
+    statsCache = {
+      collectors: parseInt(collectors.rows[0].count),
+      swaps: parseInt(swaps.rows[0].count),
+      matches: parseInt(matches.rows[0].count),
+      activeThisWeek: parseInt(active.rows[0].count),
+    };
+    statsCacheAt = Date.now();
+    res.json(statsCache);
+  } catch (err) {
+    console.error('Stats endpoint error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch stats' });
+  }
+});
+
 // ---- Internal: trigger the matching batch job ----
 // Called by Railway's HTTP cron on a schedule. Protected by a shared
 // secret passed as a query param, since Railway's simple HTTP cron
