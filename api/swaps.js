@@ -714,47 +714,25 @@ router.post('/:id/received', async (req, res) => {
     const { rows: updatedRows } = await client.query(`SELECT * FROM swaps WHERE id = $1`, [swapId]);
     const updated = updatedRows[0];
 
-    if (updated.user_a_received && updated.user_b_received) {
+    // Mark as completed as soon as either side confirms receipt —
+    // no need to wait for both. The person who received can rate immediately.
+    if (updated.status !== 'completed') {
       await client.query(
         `UPDATE swaps SET status = 'completed', updated_at = NOW() WHERE id = $1`,
         [swapId]
       );
-
-      // Adjust inventories: decrement duplicates sent, remove needs fulfilled
-      const { rows: items } = await client.query(
-        `SELECT * FROM swap_items WHERE swap_id = $1`,
-        [swapId]
-      );
-
-      for (const item of items) {
-        await client.query(
-          `UPDATE user_duplicates SET quantity = quantity - 1
-           WHERE user_id = $1 AND sticker_id = $2`,
-          [item.from_user_id, item.sticker_id]
-        );
-        await client.query(
-          `DELETE FROM user_duplicates WHERE user_id = $1 AND sticker_id = $2 AND quantity <= 0`,
-          [item.from_user_id, item.sticker_id]
-        );
-        await client.query(
-          `DELETE FROM user_needs WHERE user_id = $1 AND sticker_id = $2`,
-          [item.to_user_id, item.sticker_id]
-        );
-      }
     }
 
     await client.query('COMMIT');
 
-    // Award badges after commit — fire and forget, don't block response
-    if (updated.user_a_received && updated.user_b_received) {
-      const { checkStreakBadges, updateResponseRate } = require('./badges');
-      checkStreakBadges(updated.user_a_id).catch(() => {});
-      checkStreakBadges(updated.user_b_id).catch(() => {});
-      updateResponseRate(updated.user_a_id).catch(() => {});
-      updateResponseRate(updated.user_b_id).catch(() => {});
-    }
+    // Award badges — fire and forget
+    const { checkStreakBadges, updateResponseRate } = require('./badges');
+    checkStreakBadges(updated.user_a_id).catch(() => {});
+    checkStreakBadges(updated.user_b_id).catch(() => {});
+    updateResponseRate(updated.user_a_id).catch(() => {});
+    updateResponseRate(updated.user_b_id).catch(() => {});
 
-    res.json({ success: true, completed: updated.user_a_received && updated.user_b_received });
+    res.json({ success: true, completed: true, canRate: true });
   } catch (err) {
     await client.query('ROLLBACK');
     console.error(err);
