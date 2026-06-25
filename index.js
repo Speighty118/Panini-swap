@@ -157,11 +157,12 @@ app.get('/api/stats', async (req, res) => {
   }
   try {
     const pool = new (require('pg').Pool)({ connectionString: process.env.DATABASE_URL });
-    const [collectors, swaps, matches, active] = await Promise.all([
+    const [collectors, swaps, matches, active, stickers] = await Promise.all([
       pool.query(`SELECT COUNT(*) FROM users`),
       pool.query(`SELECT COUNT(*) FROM swaps WHERE status IN ('accepted', 'posted', 'completed')`),
       pool.query(`SELECT COUNT(*) FROM matches WHERE status = 'pending'`),
       pool.query(`SELECT COUNT(DISTINCT user_id) FROM user_sessions WHERE last_seen > NOW() - INTERVAL '7 days'`),
+      pool.query(`SELECT COUNT(*) FROM swap_items si JOIN swaps s ON s.id = si.swap_id WHERE s.status IN ('completed', 'posted', 'accepted')`),
     ]);
     await pool.end();
     statsCache = {
@@ -169,6 +170,7 @@ app.get('/api/stats', async (req, res) => {
       swaps: parseInt(swaps.rows[0].count),
       matches: parseInt(matches.rows[0].count),
       activeThisWeek: parseInt(active.rows[0].count),
+      stickersExchanged: parseInt(stickers.rows[0].count),
     };
     statsCacheAt = Date.now();
     res.json(statsCache);
