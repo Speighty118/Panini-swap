@@ -29,7 +29,7 @@ const feedbackRoutes = require('./api/feedback');
 const donationRoutes = require('./api/donations');
 const badgeRoutes = require('./api/badges');
 const reportRoutes = require('./api/reports');
-const announcementRoutes = require('./api/announcements');
+const futureCollectionsRoutes = require('./api/future_collections');
 const messagingRoutes = require('./api/messaging');
 const { runMatchingJob } = require('./jobs/run_matching');
 
@@ -135,6 +135,7 @@ app.use('/api/donations', donationRoutes);
 app.use('/api/badges', badgeRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/announcements', announcementRoutes);
+app.use('/api/future-collections', futureCollectionsRoutes);
 app.use('/api/messages', messagingRoutes);
 app.use('/api/admin', adminRoutes);
 
