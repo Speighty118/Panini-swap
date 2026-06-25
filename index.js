@@ -157,7 +157,7 @@ app.get('/api/stats', async (req, res) => {
     const pool = new (require('pg').Pool)({ connectionString: process.env.DATABASE_URL });
     const [collectors, swaps, matches, active] = await Promise.all([
       pool.query(`SELECT COUNT(*) FROM users`),
-      pool.query(`SELECT COUNT(*) FROM swaps`),
+      pool.query(`SELECT COUNT(*) FROM swaps WHERE status IN ('accepted', 'posted', 'completed')`),
       pool.query(`SELECT COUNT(*) FROM matches WHERE status = 'pending'`),
       pool.query(`SELECT COUNT(DISTINCT user_id) FROM user_sessions WHERE last_seen > NOW() - INTERVAL '7 days'`),
     ]);
