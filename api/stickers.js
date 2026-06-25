@@ -113,21 +113,41 @@ router.get('/me/duplicates', requireAuth, async (req, res) => {
 // ----------------------------------------------------------------
 // POST /api/stickers/me/duplicates
 // Body: { stickerId, quantity }  — upserts (adds or updates count)
+// Guards against reducing quantity below the number of copies
+// currently committed to active swaps.
 // ----------------------------------------------------------------
 router.post('/me/duplicates', requireAuth, async (req, res) => {
   const { stickerId, quantity = 1 } = req.body;
+  const userId = req.user.id;
 
   if (!stickerId || !Number.isInteger(quantity) || quantity < 1) {
     return res.status(400).json({ error: 'stickerId is required and quantity must be a positive integer' });
   }
 
   try {
+    // Count how many copies are committed to active swaps
+    const { rows: committed } = await pool.query(
+      `SELECT COUNT(*) AS count
+       FROM swap_items si
+       JOIN swaps s ON s.id = si.swap_id
+       WHERE si.from_user_id = $1
+         AND si.sticker_id = $2
+         AND s.status IN ('proposed', 'accepted')`,
+      [userId, stickerId]
+    );
+    const committedCount = parseInt(committed[0].count, 10);
+    if (quantity < committedCount) {
+      return res.status(409).json({
+        error: `You have ${committedCount} ${committedCount === 1 ? 'copy' : 'copies'} of this sticker committed to active swaps. You cannot set the quantity below ${committedCount}.`,
+      });
+    }
+
     const { rows } = await pool.query(
       `INSERT INTO user_duplicates (user_id, sticker_id, quantity)
        VALUES ($1, $2, $3)
        ON CONFLICT (user_id, sticker_id) DO UPDATE SET quantity = $3
        RETURNING *`,
-      [req.user.id, stickerId, quantity]
+      [userId, stickerId, quantity]
     );
     res.status(201).json(rows[0]);
   } catch (err) {
@@ -138,12 +158,39 @@ router.post('/me/duplicates', requireAuth, async (req, res) => {
 
 // ----------------------------------------------------------------
 // DELETE /api/stickers/me/duplicates/:stickerId
+// Removes a sticker from the user's duplicates list.
+// BLOCKS deletion if the sticker is currently committed to an
+// active proposed or accepted swap — this is the root cause of
+// "Failed to accept swap" errors, where a sticker disappears from
+// user_duplicates while still being in swap_items.
 // ----------------------------------------------------------------
 router.delete('/me/duplicates/:stickerId', requireAuth, async (req, res) => {
+  const userId = req.user.id;
+  const stickerId = req.params.stickerId;
+
   try {
+    // Check if this sticker is in an active swap
+    const { rows: conflicts } = await pool.query(
+      `SELECT s.id AS swap_id
+       FROM swap_items si
+       JOIN swaps s ON s.id = si.swap_id
+       WHERE si.from_user_id = $1
+         AND si.sticker_id = $2
+         AND s.status IN ('proposed', 'accepted')
+       LIMIT 1`,
+      [userId, stickerId]
+    );
+
+    if (conflicts.length > 0) {
+      return res.status(409).json({
+        error: `This sticker is part of an active swap (#${conflicts[0].swap_id}). Please wait for that swap to complete or decline it before removing this sticker.`,
+        swapId: conflicts[0].swap_id,
+      });
+    }
+
     await pool.query(
       `DELETE FROM user_duplicates WHERE user_id = $1 AND sticker_id = $2`,
-      [req.user.id, req.params.stickerId]
+      [userId, stickerId]
     );
     res.status(204).send();
   } catch (err) {
