@@ -1029,4 +1029,46 @@ router.get('/invites-list', async (req, res) => {
   }
 });
 
+// GET /api/admin/future-collections
+// Returns future collection vote results for the admin dashboard.
+// ----------------------------------------------------------------
+router.get('/future-collections', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT collection_key, COUNT(*) AS votes FROM future_collection_votes GROUP BY collection_key ORDER BY votes DESC`
+    );
+    const totalResult = await pool.query(`SELECT COUNT(*) FROM users`);
+    const totalUsers = parseInt(totalResult.rows[0].count);
+    const LABELS = {
+      wc_2030: 'FIFA World Cup 2030',
+      euro_2028: 'UEFA Euro 2028',
+      nations_league: 'UEFA Nations League',
+      pl_stickers: 'Panini Premier League Stickers',
+      pl_adrenalyn: 'Panini Premier League Adrenalyn XL',
+      match_attax_cl: 'Match Attax Champions League',
+      match_attax_pl: 'Match Attax Premier League',
+      wwc_2027: "Women's World Cup 2027",
+      weuro_2029: "Women's Euro 2029",
+      club_wc: 'FIFA Club World Cup',
+      copa_2028: 'Copa America 2028',
+      afcon: 'Africa Cup of Nations',
+      conference_league: 'UEFA Conference League',
+      scottish_prem: 'Scottish Premiership Stickers',
+      efl: 'EFL Sticker Collection',
+    };
+    res.json({
+      results: rows.map(r => ({
+        key: r.collection_key,
+        label: LABELS[r.collection_key] || r.collection_key,
+        votes: parseInt(r.votes),
+        pct: Math.round((parseInt(r.votes) / totalUsers) * 100),
+      })),
+      totalUsers,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch results' });
+  }
+});
+
 module.exports = router;
