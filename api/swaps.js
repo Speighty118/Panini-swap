@@ -431,7 +431,7 @@ router.post('/:id/accept', async (req, res) => {
              AND id != $1
              AND id IN (
                SELECT DISTINCT swap_id FROM swap_items
-               WHERE sticker_id = ANY($2::int[])
+               WHERE sticker_id = ANY($2::integer[])
                  AND from_user_id IN ($3, $4)
              )`,
           [swapId, committedStickerIds, updated.user_a_id, updated.user_b_id]
@@ -469,7 +469,7 @@ router.post('/:id/accept', async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     await client.query('ROLLBACK');
-    console.error(err);
+    console.error(`[ACCEPT SWAP ERROR] swapId=${swapId} userId=${userId} message=${err.message} code=${err.code} detail=${err.detail || ''}`);
     res.status(500).json({ error: 'Failed to accept swap' });
   } finally {
     client.release();
