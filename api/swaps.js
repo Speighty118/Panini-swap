@@ -714,9 +714,8 @@ router.post('/:id/received', async (req, res) => {
     const { rows: updatedRows } = await client.query(`SELECT * FROM swaps WHERE id = $1`, [swapId]);
     const updated = updatedRows[0];
 
-    // Mark as completed as soon as either side confirms receipt —
-    // no need to wait for both. The person who received can rate immediately.
-    if (updated.status !== 'completed') {
+    // Only mark as completed when BOTH sides have confirmed receipt
+    if (updated.user_a_received && updated.user_b_received) {
       await client.query(
         `UPDATE swaps SET status = 'completed', updated_at = NOW() WHERE id = $1`,
         [swapId]
@@ -725,14 +724,18 @@ router.post('/:id/received', async (req, res) => {
 
     await client.query('COMMIT');
 
-    // Award badges — fire and forget
-    const { checkStreakBadges, updateResponseRate } = require('./badges');
-    checkStreakBadges(updated.user_a_id).catch(() => {});
-    checkStreakBadges(updated.user_b_id).catch(() => {});
-    updateResponseRate(updated.user_a_id).catch(() => {});
-    updateResponseRate(updated.user_b_id).catch(() => {});
+    // Award badges after commit — fire and forget
+    if (updated.user_a_received && updated.user_b_received) {
+      const { checkStreakBadges, updateResponseRate } = require('./badges');
+      checkStreakBadges(updated.user_a_id).catch(() => {});
+      checkStreakBadges(updated.user_b_id).catch(() => {});
+      updateResponseRate(updated.user_a_id).catch(() => {});
+      updateResponseRate(updated.user_b_id).catch(() => {});
+    }
 
-    res.json({ success: true, completed: true, canRate: true });
+    // Always return canRate: true so the rating prompt shows immediately
+    // when the user marks received — they have the stickers so they can rate
+    res.json({ success: true, completed: updated.user_a_received && updated.user_b_received, canRate: true });
   } catch (err) {
     await client.query('ROLLBACK');
     console.error(err);
