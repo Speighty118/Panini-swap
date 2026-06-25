@@ -300,7 +300,7 @@ router.post('/forgot-password', async (req, res) => {
     const user = rows[0];
     const crypto = require('crypto');
     const token = crypto.randomBytes(32).toString('hex');
-    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
     // Invalidate any existing tokens for this user
     await pool.query(
