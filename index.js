@@ -30,6 +30,7 @@ const donationRoutes = require('./api/donations');
 const badgeRoutes = require('./api/badges');
 const reportRoutes = require('./api/reports');
 const futureCollectionsRoutes = require('./api/future_collections');
+const announcementRoutes = require('./api/announcements');
 const messagingRoutes = require('./api/messaging');
 const { runMatchingJob } = require('./jobs/run_matching');
 
