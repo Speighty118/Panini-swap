@@ -2,52 +2,118 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <title>Got One Spare? — Admin</title>
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #F5F6FA; color: #1A1F36; }
-  .login { max-width: 380px; margin: 80px auto; padding: 32px; background: white; border-radius: 12px; border: 1px solid rgba(0,0,0,0.08); }
-  .login h1 { font-size: 20px; font-weight: 700; margin-bottom: 20px; }
-  input[type=password], input[type=number] { width: 100%; padding: 10px 14px; margin-bottom: 12px; border: 1px solid rgba(0,0,0,0.12); border-radius: 8px; font-size: 14px; }
-  button { cursor: pointer; border: none; border-radius: 8px; padding: 10px 16px; font-size: 13px; font-weight: 600; }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f4f4f2; color: #0B1120; padding-bottom: env(safe-area-inset-bottom); }
+
+  /* LOGIN */
+  .login { max-width: 380px; margin: 60px auto 0; padding: 28px 24px; }
+  .login h1 { font-size: 22px; font-weight: 800; margin-bottom: 6px; color: #0B1120; }
+  .login p { font-size: 13px; color: #9CA3AF; margin-bottom: 20px; }
+  input[type=text], input[type=password], input[type=number], textarea, select { width: 100%; padding: 12px 14px; margin-bottom: 10px; border: 1.5px solid #e8e8e4; border-radius: 8px; font-size: 14px; font-family: inherit; outline: none; background: white; }
+  input:focus, textarea:focus { border-color: #1AAB8A; }
+
+  /* BUTTONS */
+  button { cursor: pointer; border: none; border-radius: 8px; padding: 10px 16px; font-size: 13px; font-weight: 600; font-family: inherit; }
   .btn-primary { background: #1AAB8A; color: white; }
   .btn-danger { background: #EF4444; color: white; }
-  .btn-secondary { background: #F5F6FA; color: #1A1F36; border: 1px solid rgba(0,0,0,0.1); }
+  .btn-secondary { background: white; color: #0B1120; border: 1px solid #e8e8e4; }
   .btn-small { padding: 5px 12px; font-size: 12px; }
-  #dashboard { display: none; max-width: 100%; margin: 0 auto; padding: 24px 24px; }
-  .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
-  .header h1 { font-size: 22px; font-weight: 700; }
-  .tabs { display: flex; gap: 4px; background: white; padding: 4px; border-radius: 10px; border: 1px solid rgba(0,0,0,0.08); margin-bottom: 24px; }
-  .tab { flex: 1; padding: 8px; text-align: center; font-size: 13px; font-weight: 500; color: #6B7280; border-radius: 8px; cursor: pointer; border: none; background: none; }
-  .tab.active { background: #1AAB8A; color: white; font-weight: 600; }
+
+  /* APP SHELL */
+  #dashboard { display: none; max-width: 680px; margin: 0 auto; }
+
+  /* TOP HEADER */
+  .app-header {
+    position: sticky; top: 0; z-index: 100;
+    background: #0B1120; color: white;
+    padding: env(safe-area-inset-top) 16px 0;
+    display: flex; align-items: center; justify-content: space-between;
+    height: calc(52px + env(safe-area-inset-top));
+  }
+  .app-header-title { font-size: 16px; font-weight: 800; letter-spacing: -0.3px; }
+  .app-header-sub { font-size: 11px; color: rgba(255,255,255,0.4); }
+
+  /* BOTTOM NAV */
+  .bottom-nav {
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 100;
+    background: #0B1120;
+    border-top: 1px solid rgba(255,255,255,0.08);
+    display: flex;
+    padding-bottom: env(safe-area-inset-bottom);
+    max-width: 680px; margin: 0 auto;
+  }
+  /* Stretch bottom nav across full width */
+  .bottom-nav-wrap { position: fixed; bottom: 0; left: 0; right: 0; z-index: 100; background: #0B1120; border-top: 1px solid rgba(255,255,255,0.08); }
+  .bottom-nav { position: static; max-width: 680px; margin: 0 auto; }
+  .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 0; cursor: pointer; border: none; background: none; border-top: 2px solid transparent; font-family: inherit; }
+  .nav-item.active { border-top-color: #1AAB8A; }
+  .nav-icon { font-size: 18px; line-height: 1; }
+  .nav-label { font-size: 9px; font-weight: 700; color: rgba(255,255,255,0.35); letter-spacing: 0.03em; }
+  .nav-item.active .nav-label { color: #1AAB8A; }
+
+  /* CONTENT AREA */
+  .content { padding: 16px 14px 80px; }
+
+  /* PANELS */
   .panel { display: none; }
   .panel.active { display: block; }
-  .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px; }
-  .stat-card { background: white; border-radius: 12px; padding: 16px 20px; border: 1px solid rgba(0,0,0,0.08); }
-  .stat-label { font-size: 11px; font-weight: 600; color: #9CA3AF; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px; }
-  .stat-value { font-size: 28px; font-weight: 700; color: #1AAB8A; }
-  .stat-sub { font-size: 12px; color: #6B7280; margin-top: 4px; }
-  .card { background: white; border-radius: 12px; border: 1px solid rgba(0,0,0,0.08); overflow: hidden; margin-bottom: 16px; }
-  .card-header { padding: 14px 18px; border-bottom: 1px solid rgba(0,0,0,0.06); display: flex; justify-content: space-between; align-items: center; }
-  .card-header h2 { font-size: 15px; font-weight: 600; }
-  table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid rgba(0,0,0,0.05); }
-  th { color: #6B7280; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; background: #FAFAFA; }
+
+  /* STATS GRID */
+  .stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 16px; }
+  @media (min-width: 480px) { .stats-grid { grid-template-columns: repeat(4, 1fr); } }
+  .stat-card { background: white; border-radius: 10px; padding: 14px 16px; border: 1px solid #e8e8e4; }
+  .stat-label { font-size: 10px; font-weight: 700; color: #9CA3AF; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
+  .stat-value { font-size: 26px; font-weight: 900; color: #1AAB8A; }
+  .stat-sub { font-size: 11px; color: #9CA3AF; margin-top: 3px; }
+
+  /* CARDS */
+  .card { background: white; border-radius: 10px; border: 1px solid #e8e8e4; overflow: hidden; margin-bottom: 12px; }
+  .card-header { padding: 12px 14px; border-bottom: 1px solid #f0f0f0; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+  .card-header h2 { font-size: 13px; font-weight: 700; color: #0B1120; }
+
+  /* TABLES — horizontally scrollable on mobile */
+  .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; min-width: 500px; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid rgba(0,0,0,0.05); white-space: nowrap; }
+  th { color: #9CA3AF; font-weight: 700; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; background: #fafaf8; }
   tr:last-child td { border-bottom: none; }
-  tr:hover td { background: #F9FAFB; }
-  .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+  tr:hover td { background: #fafaf8; }
+
+  /* BADGES */
+  .badge { display: inline-block; padding: 2px 7px; border-radius: 10px; font-size: 10px; font-weight: 700; }
   .badge-green { background: #D1FAE5; color: #065F46; }
   .badge-red { background: #FEE2E2; color: #991B1B; }
   .badge-amber { background: #FEF3C7; color: #92400E; }
   .badge-grey { background: #F3F4F6; color: #6B7280; }
   .badge-blue { background: #DBEAFE; color: #1E40AF; }
-  .empty { padding: 32px; text-align: center; color: #9CA3AF; font-size: 13px; }
-  .error { color: #EF4444; font-size: 13px; margin: 8px 0; }
-  .invite-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; padding: 16px 18px; }
-  .invite-code { background: #F5F6FA; border-radius: 8px; padding: 10px 14px; font-family: monospace; font-size: 15px; font-weight: 700; letter-spacing: 0.15em; display: flex; justify-content: space-between; align-items: center; }
+
+  .empty { padding: 28px; text-align: center; color: #9CA3AF; font-size: 13px; }
+  .error { color: #EF4444; font-size: 12px; margin: 6px 0; }
+
+  /* INVITE GRID */
+  .invite-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; padding: 12px 14px; }
+  @media (min-width: 480px) { .invite-grid { grid-template-columns: repeat(4, 1fr); } }
+  .invite-code { background: #fafaf8; border-radius: 8px; padding: 10px 12px; font-family: monospace; font-size: 13px; font-weight: 700; letter-spacing: 0.1em; display: flex; justify-content: space-between; align-items: center; }
   .invite-code.used { opacity: 0.4; }
-  .feedback-item { padding: 12px 18px; border-bottom: 1px solid rgba(0,0,0,0.05); }
+
+  /* FEEDBACK */
+  .feedback-item { padding: 12px 14px; border-bottom: 1px solid rgba(0,0,0,0.05); }
   .feedback-item:last-child { border-bottom: none; }
+
+  /* INNER TABS (swap status, feedback status) */
+  .inner-tabs { display: flex; gap: 4px; overflow-x: auto; padding: 10px 14px; scrollbar-width: none; }
+  .inner-tabs::-webkit-scrollbar { display: none; }
+  .tab { padding: 5px 12px; border-radius: 6px; font-size: 11px; font-weight: 700; cursor: pointer; border: 1px solid #e8e8e4; background: white; color: #9CA3AF; white-space: nowrap; font-family: inherit; }
+  .tab.active { background: #0B1120; color: white; border-color: #0B1120; }
+
+  /* SECTION TITLE */
+  .section-title { font-size: 11px; font-weight: 800; color: #9CA3AF; text-transform: uppercase; letter-spacing: 0.08em; padding: 8px 0 6px; }
+</style>
   .feedback-meta { font-size: 11px; color: #9CA3AF; margin-top: 4px; }
   .filter-bar { padding: 10px 18px; border-bottom: 1px solid rgba(0,0,0,0.06); display: flex; gap: 8px; align-items: center; }
   select { padding: 6px 10px; border-radius: 6px; border: 1px solid rgba(0,0,0,0.12); font-size: 13px; background: white; }
@@ -60,30 +126,25 @@
 <body>
 
 <div id="login" class="login">
-  <h1>⚙️ Got One Spare? Admin</h1>
-  <p style="font-size:13px;color:#6B7280;margin-bottom:16px;">Enter your admin secret to continue.</p>
-  <input type="text" id="secretInput" placeholder="Admin secret" style="margin-bottom:8px;-webkit-text-security:disc" />
-  <a href="#" id="loginBtn" style="display:block;width:100%;padding:12px 0;background:#1AAB8A;color:white;text-align:center;border-radius:8px;font-weight:700;font-size:15px;text-decoration:none;box-sizing:border-box;margin-bottom:8px;-webkit-tap-highlight-color:rgba(0,0,0,0.1)">Enter</a>
-  <div id="loginError" style="min-height:24px;font-size:13px;color:#DC2626;word-break:break-all">JS loading...</div>
+  <h1>⚙️ Admin</h1>
+  <p>Got One Spare? — Admin Dashboard</p>
+  <input type="text" id="secretInput" placeholder="Admin secret" style="-webkit-text-security:disc" />
+  <a href="#" id="loginBtn" style="display:block;width:100%;padding:13px 0;background:#1AAB8A;color:white;text-align:center;border-radius:8px;font-weight:700;font-size:15px;text-decoration:none;box-sizing:border-box;margin-bottom:10px">Sign In</a>
+  <div id="loginError" style="min-height:20px;font-size:13px;color:#EF4444;word-break:break-all"></div>
 </div>
 
 <div id="dashboard">
-  <div class="header">
-    <h1>⚙️ Admin Dashboard</h1>
-    <button class="btn-secondary" id="refreshBtn" onclick="handleRefresh()">↻ Refresh</button>
+  <!-- TOP HEADER -->
+  <div class="app-header">
+    <div>
+      <div class="app-header-title">⚙️ Got One Spare?</div>
+      <div class="app-header-sub">Admin Dashboard</div>
+    </div>
+    <button class="btn-secondary btn-small" id="refreshBtn" onclick="handleRefresh()">↻ Refresh</button>
   </div>
 
-  <div class="tabs">
-    <button class="tab active" onclick="showTab('overview')">Overview</button>
-    <button class="tab" onclick="showTab('analytics')">📊 Analytics</button>
-    <button class="tab" onclick="showTab('users')">Users</button>
-    <button class="tab" onclick="showTab('swaps')">Swaps</button>
-    <button class="tab" onclick="showTab('messages')">💬 Messages</button>
-    <button class="tab" onclick="showTab('moderation')">Moderation</button>
-    <button class="tab" onclick="showTab('invites')">Invite Codes</button>
-    <button class="tab" onclick="showTab('feedback')">Feedback</button>
-    <button class="tab" onclick="showTab('donations')">Donations</button>
-  </div>
+  <!-- CONTENT AREA -->
+  <div class="content">
 
   <!-- OVERVIEW -->
   <div id="panel-overview" class="panel active">
@@ -390,6 +451,48 @@
       <div id="feedbackList"></div>
     </div>
   </div>
+
+  </div><!-- end .content -->
+</div><!-- end #dashboard -->
+
+<!-- BOTTOM NAV -->
+<div class="bottom-nav-wrap" id="bottomNav" style="display:none">
+  <div class="bottom-nav">
+    <button class="nav-item active" onclick="showTab('overview')">
+      <span class="nav-icon">📊</span>
+      <span class="nav-label">Overview</span>
+    </button>
+    <button class="nav-item" onclick="showTab('users')">
+      <span class="nav-icon">👥</span>
+      <span class="nav-label">Users</span>
+    </button>
+    <button class="nav-item" onclick="showTab('swaps')">
+      <span class="nav-icon">🔄</span>
+      <span class="nav-label">Swaps</span>
+    </button>
+    <button class="nav-item" onclick="showTab('messages')">
+      <span class="nav-icon">💬</span>
+      <span class="nav-label">Messages</span>
+    </button>
+    <button class="nav-item" onclick="showTab('more')">
+      <span class="nav-icon">⋯</span>
+      <span class="nav-label">More</span>
+    </button>
+  </div>
+</div>
+
+<!-- MORE PANEL (hidden tab for additional sections) -->
+<div id="panel-more" class="panel" style="padding:0">
+  <div class="content" style="padding-top:0">
+    <div class="section-title" style="padding-top:16px">More sections</div>
+    <div class="card">
+      <button onclick="showTab('analytics')" style="display:flex;align-items:center;gap:12px;width:100%;padding:14px;background:none;border:none;border-bottom:1px solid #f0f0f0;font-family:inherit;font-size:14px;font-weight:600;color:#0B1120;text-align:left;cursor:pointer">📊 Analytics</button>
+      <button onclick="showTab('moderation')" style="display:flex;align-items:center;gap:12px;width:100%;padding:14px;background:none;border:none;border-bottom:1px solid #f0f0f0;font-family:inherit;font-size:14px;font-weight:600;color:#0B1120;text-align:left;cursor:pointer">🛡 Moderation</button>
+      <button onclick="showTab('invites')" style="display:flex;align-items:center;gap:12px;width:100%;padding:14px;background:none;border:none;border-bottom:1px solid #f0f0f0;font-family:inherit;font-size:14px;font-weight:600;color:#0B1120;text-align:left;cursor:pointer">🎟 Invite Codes</button>
+      <button onclick="showTab('feedback')" style="display:flex;align-items:center;gap:12px;width:100%;padding:14px;background:none;border:none;border-bottom:1px solid #f0f0f0;font-family:inherit;font-size:14px;font-weight:600;color:#0B1120;text-align:left;cursor:pointer">💬 Feedback</button>
+      <button onclick="showTab('donations')" style="display:flex;align-items:center;gap:12px;width:100%;padding:14px;background:none;border:none;font-family:inherit;font-size:14px;font-weight:600;color:#0B1120;text-align:left;cursor:pointer">💰 Donations</button>
+    </div>
+  </div>
 </div>
 
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
@@ -405,27 +508,24 @@ const API_BASE = (window.location.hostname === 'panini-swap-production-69ef.up.r
 let adminSecret = new URLSearchParams(window.location.search).get('s') || '';
 let allUsers = [];
 
-// Immediate test — if this runs, JS is working
-(function() {
-  var el = document.getElementById('loginError');
-  if (el) el.textContent = 'JS OK — tap Enter to login. API: ' + API_BASE;
-})();
-
 function showTab(name) {
-  document.querySelectorAll('.tabs .tab').forEach((t, i) => {
-    const panels = ['overview','analytics','users','swaps','messages','moderation','invites','feedback','donations'];
-    t.classList.toggle('active', panels[i] === name);
-  });
+  const allPanels = ['overview','analytics','users','swaps','messages','moderation','invites','feedback','donations','more'];
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-  document.getElementById('panel-' + name).classList.add('active');
+  const panel = document.getElementById('panel-' + name);
+  if (panel) panel.classList.add('active');
+
+  // Update bottom nav active state
+  const navMap = { overview: 0, users: 1, swaps: 2, messages: 3, more: 4, analytics: 4, moderation: 4, invites: 4, feedback: 4, donations: 4 };
+  document.querySelectorAll('.nav-item').forEach((item, i) => {
+    item.classList.toggle('active', i === navMap[name]);
+  });
+
   if (name === 'swaps') loadSwaps();
   if (name === 'donations') loadDonations();
   if (name === 'moderation') { loadReportedUsers(); loadDisputes(); loadFraudFlags(); loadNoShowReports(); }
   if (name === 'messages') loadAdminMessages();
   if (name === 'analytics') {
     loadAnalytics();
-    // Leaflet maps initialised in hidden panels don't know their size.
-    // Invalidate after a short delay to let the panel render first.
     setTimeout(() => { if (leafletMap) leafletMap.invalidateSize(); }, 100);
   }
 }
@@ -433,19 +533,12 @@ function showTab(name) {
 async function adminFetch(path, opts = {}) {
   const safeSecret = adminSecret.replace(/[^\x20-\x7E]/g, '').trim();
   const url = `${API_BASE}${path}`;
-  try {
-    const res = await fetch(url, {
-      ...opts,
-      headers: { 'Content-Type': 'application/json', 'X-Admin-Secret': safeSecret, ...(opts.headers||{}) },
-    });
-    if (!res.ok) { const b = await res.json().catch(()=>{}); throw new Error(b?.error||`Error ${res.status}`); }
-    return res.json();
-  } catch(err) {
-    // Show full error on screen for mobile debugging
-    var el = document.getElementById('loginError');
-    if (el) el.textContent = 'URL:' + url + ' ERR:' + err.message + ' secret:' + safeSecret.length + 'chars';
-    throw err;
-  }
+  const res = await fetch(url, {
+    ...opts,
+    headers: { 'Content-Type': 'application/json', 'X-Admin-Secret': safeSecret, ...(opts.headers||{}) },
+  });
+  if (!res.ok) { const b = await res.json().catch(()=>{}); throw new Error(b?.error||`Error ${res.status}`); }
+  return res.json();
 }
 
 async function login() {
@@ -457,7 +550,7 @@ async function login() {
   try {
     await adminFetch('/admin/overview');
     document.getElementById('login').style.display = 'none';
-    document.getElementById('dashboard').style.display = 'block';
+    document.getElementById('dashboard').style.display = 'block'; document.getElementById('bottomNav').style.display = 'block';
     refreshAll();
   } catch(e) {
     errorEl.textContent = 'Error: ' + e.message;
@@ -549,7 +642,7 @@ async function loadSwaps() {
       disputed: 'Disputed',
     };
 
-    el.innerHTML = `<table>
+    el.innerHTML = `<div class="table-wrap"><table>
       <thead><tr>
         <th>#</th>
         <th>Users</th>
@@ -598,7 +691,7 @@ async function loadSwaps() {
           <td style="font-size:12px;color:#9CA3AF;white-space:nowrap">${new Date(s.updated_at).toLocaleString()}</td>
         </tr>`;
       }).join('')}
-      </tbody></table>`;
+      </tbody></table></div>`;
   } catch(err) {
     document.getElementById('swapsTable').innerHTML = `<div class="empty">Error: ${err.message}</div>`;
   }
@@ -615,7 +708,7 @@ async function loadAdminMessages() {
     const convEl = document.getElementById('convList');
     if (!convs.length) { convEl.innerHTML = '<div class="empty">No conversations yet.</div>'; }
     else {
-      convEl.innerHTML = `<table>
+      convEl.innerHTML = `<div class="table-wrap"><table>
         <thead><tr><th>Users</th><th>Messages</th><th>Reported</th><th>Last active</th><th></th></tr></thead>
         <tbody>${convs.map(c => `<tr>
           <td><strong>${e(c.user_a_name)}</strong> ↔ <strong>${e(c.user_b_name)}</strong></td>
@@ -624,7 +717,7 @@ async function loadAdminMessages() {
           <td style="font-size:12px;color:#6B7280">${c.last_message_at ? new Date(c.last_message_at).toLocaleDateString() : '—'}</td>
           <td><button class="btn-small btn-secondary" onclick="viewConversation(${c.conversation_id}, '${e(c.user_a_name)} ↔ ${e(c.user_b_name)}')">View</button></td>
         </tr>`).join('')}
-        </tbody></table>`;
+        </tbody></table></div>`;
     }
 
     document.getElementById('reportedMsgCount').textContent = `${reported.length} reports`;
@@ -737,7 +830,7 @@ async function loadDonations() {
       footer: '🔗 Footer link',
     };
 
-    el.innerHTML = `<table>
+    el.innerHTML = `<div class="table-wrap"><table>
       <thead><tr>
         <th>User</th>
         <th>Button location</th>
@@ -753,7 +846,7 @@ async function loadDonations() {
         <td><span class="badge badge-blue">${e(LOCATION_LABELS[d.location] || d.location)}</span></td>
         <td style="font-size:12px;color:#6B7280">${new Date(d.clicked_at).toLocaleString()}</td>
       </tr>`).join('')}
-      </tbody></table>`;
+      </tbody></table></div>`;
   } catch(err) {
     document.getElementById('donationsList').innerHTML = `<div class="empty">Error: ${err.message}</div>`;
   }
@@ -914,7 +1007,7 @@ async function loadZeroStickers() {
     document.getElementById('zeroStickersCount').textContent = `${data.length} users`;
     const el = document.getElementById('zeroStickers');
     if (!data.length) { el.innerHTML = '<div class="empty">Everyone has added stickers. 🎉</div>'; return; }
-    el.innerHTML = `<table>
+    el.innerHTML = `<div class="table-wrap"><table>
       <thead><tr><th>User</th><th>Joined</th><th>Last login</th><th>Logins</th><th></th></tr></thead>
       <tbody>${data.map(u => `<tr>
         <td><strong>${e(u.name)}</strong><div style="font-size:11px;color:#6B7280">${e(u.email)}</div></td>
@@ -923,7 +1016,7 @@ async function loadZeroStickers() {
         <td>${u.login_count || 0}</td>
         <td><button class="btn-small btn-primary" onclick="nudgeUser('${e(u.email)}', ${u.id})">Nudge</button></td>
       </tr>`).join('')}
-      </tbody></table>`;
+      </tbody></table></div>`;
   } catch(e) { console.error('zero stickers', e); }
 }
 
@@ -1136,7 +1229,7 @@ async function loadErrorLog() {
       </div>`;
     }
 
-    el.innerHTML = summary + `<table>
+    el.innerHTML = summary + `<div class="table-wrap"><table>
       <thead><tr><th>Type</th><th>Path</th><th>IP</th><th>When</th></tr></thead>
       <tbody>${data.slice(0, 20).map(err => `<tr>
         <td><span class="badge ${err.type === 'rate_limit' ? 'badge-amber' : 'badge-red'}">${e(err.type)}</span></td>
@@ -1144,7 +1237,7 @@ async function loadErrorLog() {
         <td style="font-size:12px;color:#6B7280">${e(err.ip || '—')}</td>
         <td style="font-size:12px;color:#6B7280">${new Date(err.created_at).toLocaleTimeString()}</td>
       </tr>`).join('')}
-      </tbody></table>`;
+      </tbody></table></div>`;
   } catch(err) {
     document.getElementById('errorLogList').innerHTML = `<div class="empty">Error: ${err.message}</div>`;
   }
@@ -1168,7 +1261,7 @@ async function loadFraudFlags() {
     document.getElementById('fraudCount').textContent = `${data.length} flagged`;
     const el = document.getElementById('fraudFlagsList');
     if (!data.length) { el.innerHTML = '<div class="empty">No fraud flags. 🎉</div>'; return; }
-    el.innerHTML = `<table>
+    el.innerHTML = `<div class="table-wrap"><table>
       <thead><tr><th>User</th><th>Stuck swaps</th><th>Disputes</th><th>No-show reports</th><th>Times reported</th><th></th></tr></thead>
       <tbody>${data.map(u => `<tr>
         <td><strong>${e(u.name)}</strong><div style="font-size:11px;color:#6B7280">${e(u.email)}</div></td>
@@ -1178,7 +1271,7 @@ async function loadFraudFlags() {
         <td>${u.times_reported || 0}</td>
         <td><button class="btn-small btn-danger" onclick="toggleSuspend(${u.id}, true)">Suspend</button></td>
       </tr>`).join('')}
-      </tbody></table>`;
+      </tbody></table></div>`;
   } catch(err) { document.getElementById('fraudFlagsList').innerHTML = `<div class="empty">Error: ${err.message}</div>`; }
 }
 
@@ -1188,7 +1281,7 @@ async function loadNoShowReports() {
     document.getElementById('noShowCount').textContent = `${data.length} reports`;
     const el = document.getElementById('noShowList');
     if (!data.length) { el.innerHTML = '<div class="empty">No no-show reports yet.</div>'; return; }
-    el.innerHTML = `<table>
+    el.innerHTML = `<div class="table-wrap"><table>
       <thead><tr><th>Reported user</th><th>Reported by</th><th>Swap</th><th>Notes</th><th>When</th></tr></thead>
       <tbody>${data.map(r => `<tr>
         <td><strong>${e(r.reported_name)}</strong><div style="font-size:11px;color:#6B7280">${e(r.reported_email)} · ${r.total_reports_against} total reports</div></td>
@@ -1197,7 +1290,7 @@ async function loadNoShowReports() {
         <td style="font-size:12px;color:#6B7280">${r.notes ? e(r.notes) : '—'}</td>
         <td style="font-size:12px;color:#6B7280">${new Date(r.created_at).toLocaleDateString()}</td>
       </tr>`).join('')}
-      </tbody></table>`;
+      </tbody></table></div>`;
   } catch(err) { document.getElementById('noShowList').innerHTML = `<div class="empty">Error: ${err.message}</div>`; }
 }
 
@@ -1349,7 +1442,7 @@ function renderUsers(users) {
     }
   }).join('');
 
-  el.innerHTML = `<div style="overflow-x:auto"><table style="min-width:1100px">
+  el.innerHTML = `<div style="overflow-x:auto"><div class="table-wrap"><table style="min-width:1100px">
     <thead><tr>
       <th>User</th>
       <th onclick="sortUsers('created_at')" style="${thActive('created_at')}">Signed up ${sortArrow('created_at')}</th>
@@ -1372,13 +1465,13 @@ async function loadReportedUsers() {
     const users = await adminFetch('/admin/reported-users');
     const el = document.getElementById('reportedUsersTable');
     if (!users.length) { el.innerHTML = '<div class="empty">No reported users.</div>'; return; }
-    el.innerHTML = `<table>
+    el.innerHTML = `<div class="table-wrap"><table>
       <thead><tr><th>Name</th><th>Email</th><th>Times reported</th><th>Status</th><th></th></tr></thead>
       <tbody>${users.map(u => `<tr>
         <td>${e(u.name)}</td><td>${e(u.email)}</td><td>${u.times_reported}</td>
         <td><span class="badge ${u.is_suspended?'badge-red':'badge-green'}">${u.is_suspended?'Suspended':'Active'}</span></td>
         <td><button class="btn-small ${u.is_suspended?'btn-secondary':'btn-danger'}" onclick="toggleSuspend(${u.id},${!u.is_suspended})">${u.is_suspended?'Unsuspend':'Suspend'}</button></td>
-      </tr>`).join('')}</tbody></table>`;
+      </tr>`).join('')}</tbody></table></div>`;
   } catch(e) { console.error('reported', e); }
 }
 
@@ -1388,7 +1481,7 @@ async function loadDisputes() {
     const d = await adminFetch(`/admin/disputes${status?'?status='+status:''}`);
     const el = document.getElementById('disputesTable');
     if (!d.length) { el.innerHTML = '<div class="empty">No disputes.</div>'; return; }
-    el.innerHTML = `<table>
+    el.innerHTML = `<div class="table-wrap"><table>
       <thead><tr><th>Swap</th><th>Raised by</th><th>Against</th><th>Reason</th><th>Status</th><th></th></tr></thead>
       <tbody>${d.map(x => `<tr>
         <td>#${x.swap_id}</td>
@@ -1400,7 +1493,7 @@ async function loadDisputes() {
           ${x.status!=='resolved'?`<button class="btn-small btn-secondary" onclick="updateDispute(${x.id},'resolved')">Resolve</button>`:''}
           ${x.status!=='dismissed'?`<button class="btn-small btn-secondary" onclick="updateDispute(${x.id},'dismissed')">Dismiss</button>`:''}
         </td>
-      </tr>`).join('')}</tbody></table>`;
+      </tr>`).join('')}</tbody></table></div>`;
   } catch(err) { console.error('disputes', err); }
 }
 
@@ -1666,16 +1759,14 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Auto-login from URL parameter — runs after all functions defined
 if (adminSecret) {
-  document.getElementById('loginError').textContent = 'Auto-logging in... secret length: ' + adminSecret.length;
   adminFetch('/admin/overview').then(function() {
     document.getElementById('login').style.display = 'none';
     document.getElementById('dashboard').style.display = 'block';
+    document.getElementById('bottomNav').style.display = 'block';
     refreshAll();
   }).catch(function(err) {
-    document.getElementById('loginError').textContent = 'Auto-login failed: ' + err.message;
+    document.getElementById('loginError').textContent = 'Error: ' + err.message;
   });
-} else {
-  document.getElementById('loginError').textContent = 'Debug: no secret in URL. URL: ' + window.location.search;
 }
 </script>
 </body>
