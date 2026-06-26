@@ -398,6 +398,11 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>
+window.onerror = function(msg, src, line) {
+  var el = document.getElementById('loginError');
+  if (el) el.textContent = 'JS Error line ' + line + ': ' + msg;
+  return false;
+};
 const API_BASE = 'https://panini-swap-production-69ef.up.railway.app/api';
 let adminSecret = new URLSearchParams(window.location.search).get('s') || '';
 let allUsers = [];
