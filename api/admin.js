@@ -852,6 +852,14 @@ router.post('/messages/send', async (req, res) => {
     ).catch(() => {});
 
     await client.query('COMMIT');
+
+    // Push notification
+    const { sendPushNotification } = require('./push');
+    sendPushNotification(recipientId, {
+      title: '💬 New message from Got One Spare?',
+      body: body.trim().slice(0, 80),
+    }).catch(() => {});
+
     res.json({ success: true, conversationId });
   } catch (err) {
     await client.query('ROLLBACK');
