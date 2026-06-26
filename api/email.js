@@ -81,4 +81,117 @@ async function sendPasswordResetEmail(toEmail, name, resetUrl) {
   });
 }
 
-module.exports = { sendVerificationEmail, sendDisputeNotification, sendPasswordResetEmail };
+module.exports = { sendVerificationEmail, sendDisputeNotification, sendPasswordResetEmail, sendSwapProposedEmail, sendSwapAcceptedEmail, sendSwapPostedEmail, sendSwapReceivedEmail, sendSwapReminderEmail };
+
+const SITE_URL = process.env.FRONTEND_URL || 'https://www.gotonespare.com';
+
+function emailWrapper(content) {
+  return `
+    <div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto; background: #ffffff; border: 1px solid #e8e8e4; border-radius: 8px; overflow: hidden;">
+      <div style="background: #0B1120; padding: 20px 28px; display: flex; align-items: center; gap: 12px;">
+        <span style="font-size: 18px; font-weight: 900; color: white; letter-spacing: -0.3px;">Got One Spare?</span>
+        <span style="font-size: 12px; color: rgba(255,255,255,0.4);">WC2026 Sticker Swaps</span>
+      </div>
+      <div style="padding: 28px;">
+        ${content}
+        <div style="margin-top: 28px; padding-top: 20px; border-top: 1px solid #f0f0f0; font-size: 11px; color: #bbb; line-height: 1.6;">
+          You're receiving this because you have an account on <a href="${SITE_URL}" style="color: #1AAB8A;">gotonespare.com</a>.<br>
+          You can update your email preferences in your <a href="${SITE_URL}" style="color: #1AAB8A;">profile settings</a>.
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function ctaButton(text, url) {
+  return `<p style="margin: 20px 0;"><a href="${url}" style="background: #1AAB8A; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: 700; font-size: 14px;">${text}</a></p>`;
+}
+
+async function sendSwapProposedEmail(toEmail, { recipientName, proposerName, swapId, count }) {
+  return resend.emails.send({
+    from: FROM_EMAIL,
+    to: toEmail,
+    subject: `🤝 ${proposerName} wants to swap stickers with you!`,
+    html: emailWrapper(`
+      <h2 style="color: #0B1120; font-size: 20px; margin: 0 0 16px;">New swap proposal</h2>
+      <p style="color: #444; line-height: 1.6; margin: 0 0 12px;">Hi ${recipientName},</p>
+      <p style="color: #444; line-height: 1.6; margin: 0 0 12px;"><strong>${proposerName}</strong> has proposed a swap with you on Got One Spare?</p>
+      <div style="background: #f8f8f6; border: 1px solid #e8e8e4; border-left: 3px solid #1AAB8A; border-radius: 4px; padding: 14px 16px; margin: 16px 0;">
+        <div style="font-size: 22px; font-weight: 900; color: #1AAB8A; font-family: monospace;">${count} stickers each way</div>
+        <div style="font-size: 12px; color: #999; margin-top: 4px;">Equal swap — you give ${count}, you get ${count}</div>
+      </div>
+      <p style="color: #444; line-height: 1.6;">Log in to review the full sticker list and accept or decline.</p>
+      ${ctaButton('View swap →', `${SITE_URL}`)}
+      <p style="color: #999; font-size: 12px;">Swap reference: #${swapId}</p>
+    `),
+  });
+}
+
+async function sendSwapAcceptedEmail(toEmail, { recipientName, acceptorName, swapId, count }) {
+  return resend.emails.send({
+    from: FROM_EMAIL,
+    to: toEmail,
+    subject: `🎉 Your swap has been accepted!`,
+    html: emailWrapper(`
+      <h2 style="color: #0B1120; font-size: 20px; margin: 0 0 16px;">Swap accepted!</h2>
+      <p style="color: #444; line-height: 1.6; margin: 0 0 12px;">Hi ${recipientName},</p>
+      <p style="color: #444; line-height: 1.6; margin: 0 0 12px;"><strong>${acceptorName}</strong> has accepted your swap. Time to get posting!</p>
+      <div style="background: #f0fdf9; border: 1px solid #A7F3D0; border-radius: 4px; padding: 14px 16px; margin: 16px 0;">
+        <div style="font-size: 14px; font-weight: 700; color: #065F46;">✓ Both parties have accepted</div>
+        <div style="font-size: 12px; color: #065F46; margin-top: 4px;">Open the swap to see the address and send your ${count} stickers.</div>
+      </div>
+      ${ctaButton('View swap and get posting →', `${SITE_URL}`)}
+      <p style="color: #999; font-size: 12px;">Swap reference: #${swapId}</p>
+    `),
+  });
+}
+
+async function sendSwapPostedEmail(toEmail, { recipientName, senderName, swapId }) {
+  return resend.emails.send({
+    from: FROM_EMAIL,
+    to: toEmail,
+    subject: `📮 ${senderName} has posted their stickers`,
+    html: emailWrapper(`
+      <h2 style="color: #0B1120; font-size: 20px; margin: 0 0 16px;">Stickers on their way!</h2>
+      <p style="color: #444; line-height: 1.6; margin: 0 0 12px;">Hi ${recipientName},</p>
+      <p style="color: #444; line-height: 1.6; margin: 0 0 16px;"><strong>${senderName}</strong> has marked their stickers as posted. Keep an eye out for them in the post!</p>
+      <p style="color: #444; line-height: 1.6;">Don't forget to post your stickers back to them if you haven't already, and mark as received once your stickers arrive.</p>
+      ${ctaButton('View swap →', `${SITE_URL}`)}
+      <p style="color: #999; font-size: 12px;">Swap reference: #${swapId}</p>
+    `),
+  });
+}
+
+async function sendSwapReceivedEmail(toEmail, { recipientName, receiverName, swapId }) {
+  return resend.emails.send({
+    from: FROM_EMAIL,
+    to: toEmail,
+    subject: `📦 ${receiverName} has confirmed they received their stickers`,
+    html: emailWrapper(`
+      <h2 style="color: #0B1120; font-size: 20px; margin: 0 0 16px;">Stickers received!</h2>
+      <p style="color: #444; line-height: 1.6; margin: 0 0 12px;">Hi ${recipientName},</p>
+      <p style="color: #444; line-height: 1.6; margin: 0 0 16px;"><strong>${receiverName}</strong> has confirmed they received their stickers from you. Great swap!</p>
+      <p style="color: #444; line-height: 1.6;">Don't forget to mark your stickers as received once they arrive and leave a rating for your swap partner.</p>
+      ${ctaButton('View swap →', `${SITE_URL}`)}
+      <p style="color: #999; font-size: 12px;">Swap reference: #${swapId}</p>
+    `),
+  });
+}
+
+async function sendSwapReminderEmail(toEmail, { recipientName, proposerName, swapId, count }) {
+  return resend.emails.send({
+    from: FROM_EMAIL,
+    to: toEmail,
+    subject: `👀 Don't miss a potential sticker swap!`,
+    html: emailWrapper(`
+      <h2 style="color: #0B1120; font-size: 20px; margin: 0 0 16px;">You have a swap waiting</h2>
+      <p style="color: #444; line-height: 1.6; margin: 0 0 12px;">Hi ${recipientName},</p>
+      <p style="color: #444; line-height: 1.6; margin: 0 0 12px;"><strong>${proposerName}</strong> proposed a swap with you over 24 hours ago and is still waiting for your response.</p>
+      <div style="background: #FEF3C7; border: 1px solid #FDE68A; border-radius: 4px; padding: 14px 16px; margin: 16px 0;">
+        <div style="font-size: 14px; font-weight: 700; color: #92400E;">⏳ ${count} stickers each way — don't let it expire!</div>
+      </div>
+      ${ctaButton('Review and respond →', `${SITE_URL}`)}
+      <p style="color: #999; font-size: 12px;">Swap reference: #${swapId}</p>
+    `),
+  });
+}
