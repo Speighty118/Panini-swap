@@ -41,7 +41,9 @@ router.get('/vapid-public-key', (req, res) => {
 // ----------------------------------------------------------------
 router.post('/subscribe', requireAuth, async (req, res) => {
   const { subscription, isStandalone } = req.body;
+  console.log(`[PUSH SUBSCRIBE] userId=${req.user.id} isStandalone=${isStandalone} hasEndpoint=${!!subscription?.endpoint}`);
   if (!subscription || !subscription.endpoint) {
+    console.log('[PUSH SUBSCRIBE] Invalid subscription - missing endpoint');
     return res.status(400).json({ error: 'Invalid subscription' });
   }
   try {
@@ -52,9 +54,10 @@ router.post('/subscribe', requireAuth, async (req, res) => {
        WHERE id = $3`,
       [JSON.stringify(subscription), isStandalone === true, req.user.id]
     );
+    console.log(`[PUSH SUBSCRIBE] Success for userId=${req.user.id}`);
     res.json({ success: true });
   } catch (err) {
-    console.error('Push subscribe error:', err.message);
+    console.error('[PUSH SUBSCRIBE] Error:', err.message);
     res.status(500).json({ error: 'Failed to save subscription' });
   }
 });
