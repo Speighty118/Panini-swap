@@ -1,0 +1,1637 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Got One Spare? — Admin</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #F5F6FA; color: #1A1F36; }
+  .login { max-width: 380px; margin: 80px auto; padding: 32px; background: white; border-radius: 12px; border: 1px solid rgba(0,0,0,0.08); }
+  .login h1 { font-size: 20px; font-weight: 700; margin-bottom: 20px; }
+  input[type=password], input[type=number] { width: 100%; padding: 10px 14px; margin-bottom: 12px; border: 1px solid rgba(0,0,0,0.12); border-radius: 8px; font-size: 14px; }
+  button { cursor: pointer; border: none; border-radius: 8px; padding: 10px 16px; font-size: 13px; font-weight: 600; }
+  .btn-primary { background: #1AAB8A; color: white; }
+  .btn-danger { background: #EF4444; color: white; }
+  .btn-secondary { background: #F5F6FA; color: #1A1F36; border: 1px solid rgba(0,0,0,0.1); }
+  .btn-small { padding: 5px 12px; font-size: 12px; }
+  #dashboard { display: none; max-width: 100%; margin: 0 auto; padding: 24px 24px; }
+  .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+  .header h1 { font-size: 22px; font-weight: 700; }
+  .tabs { display: flex; gap: 4px; background: white; padding: 4px; border-radius: 10px; border: 1px solid rgba(0,0,0,0.08); margin-bottom: 24px; }
+  .tab { flex: 1; padding: 8px; text-align: center; font-size: 13px; font-weight: 500; color: #6B7280; border-radius: 8px; cursor: pointer; border: none; background: none; }
+  .tab.active { background: #1AAB8A; color: white; font-weight: 600; }
+  .panel { display: none; }
+  .panel.active { display: block; }
+  .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px; }
+  .stat-card { background: white; border-radius: 12px; padding: 16px 20px; border: 1px solid rgba(0,0,0,0.08); }
+  .stat-label { font-size: 11px; font-weight: 600; color: #9CA3AF; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px; }
+  .stat-value { font-size: 28px; font-weight: 700; color: #1AAB8A; }
+  .stat-sub { font-size: 12px; color: #6B7280; margin-top: 4px; }
+  .card { background: white; border-radius: 12px; border: 1px solid rgba(0,0,0,0.08); overflow: hidden; margin-bottom: 16px; }
+  .card-header { padding: 14px 18px; border-bottom: 1px solid rgba(0,0,0,0.06); display: flex; justify-content: space-between; align-items: center; }
+  .card-header h2 { font-size: 15px; font-weight: 600; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid rgba(0,0,0,0.05); }
+  th { color: #6B7280; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; background: #FAFAFA; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #F9FAFB; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+  .badge-green { background: #D1FAE5; color: #065F46; }
+  .badge-red { background: #FEE2E2; color: #991B1B; }
+  .badge-amber { background: #FEF3C7; color: #92400E; }
+  .badge-grey { background: #F3F4F6; color: #6B7280; }
+  .badge-blue { background: #DBEAFE; color: #1E40AF; }
+  .empty { padding: 32px; text-align: center; color: #9CA3AF; font-size: 13px; }
+  .error { color: #EF4444; font-size: 13px; margin: 8px 0; }
+  .invite-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; padding: 16px 18px; }
+  .invite-code { background: #F5F6FA; border-radius: 8px; padding: 10px 14px; font-family: monospace; font-size: 15px; font-weight: 700; letter-spacing: 0.15em; display: flex; justify-content: space-between; align-items: center; }
+  .invite-code.used { opacity: 0.4; }
+  .feedback-item { padding: 12px 18px; border-bottom: 1px solid rgba(0,0,0,0.05); }
+  .feedback-item:last-child { border-bottom: none; }
+  .feedback-meta { font-size: 11px; color: #9CA3AF; margin-top: 4px; }
+  .filter-bar { padding: 10px 18px; border-bottom: 1px solid rgba(0,0,0,0.06); display: flex; gap: 8px; align-items: center; }
+  select { padding: 6px 10px; border-radius: 6px; border: 1px solid rgba(0,0,0,0.12); font-size: 13px; background: white; }
+  input[type=text] { padding: 6px 10px; border-radius: 6px; border: 1px solid rgba(0,0,0,0.12); font-size: 13px; width: 200px; }
+  .analytics-user { font-size: 12px; color: #6B7280; }
+  @media (max-width: 768px) { .stats-grid { grid-template-columns: 1fr 1fr; } .invite-grid { grid-template-columns: 1fr 1fr; } }
+  @keyframes pulse { 0%,100% { transform: scale(1); opacity:1; } 50% { transform: scale(1.3); opacity:0.7; } }
+</style>
+</head>
+<body>
+
+<div id="login" class="login">
+  <h1>⚙️ Got One Spare? Admin</h1>
+  <p style="font-size:13px;color:#6B7280;margin-bottom:16px;">Enter your admin secret to continue.</p>
+  <input type="password" id="secretInput" placeholder="Admin secret" />
+  <button class="btn-primary" style="width:100%" onclick="login()">Enter</button>
+  <div id="loginError" class="error"></div>
+</div>
+
+<div id="dashboard">
+  <div class="header">
+    <h1>⚙️ Admin Dashboard</h1>
+    <button class="btn-secondary" id="refreshBtn" onclick="handleRefresh()">↻ Refresh</button>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" onclick="showTab('overview')">Overview</button>
+    <button class="tab" onclick="showTab('analytics')">📊 Analytics</button>
+    <button class="tab" onclick="showTab('users')">Users</button>
+    <button class="tab" onclick="showTab('swaps')">Swaps</button>
+    <button class="tab" onclick="showTab('messages')">💬 Messages</button>
+    <button class="tab" onclick="showTab('moderation')">Moderation</button>
+    <button class="tab" onclick="showTab('invites')">Invite Codes</button>
+    <button class="tab" onclick="showTab('feedback')">Feedback</button>
+    <button class="tab" onclick="showTab('donations')">Donations</button>
+  </div>
+
+  <!-- OVERVIEW -->
+  <div id="panel-overview" class="panel active">
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-header">
+        <h2>🔴 Recent errors (last hour)</h2>
+        <button class="btn-small btn-secondary" onclick="loadErrorLog()">Refresh</button>
+      </div>
+      <div id="errorLogList"><div class="empty">Loading...</div></div>
+    </div>
+
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-header">
+        <h2>🩺 System health</h2>
+        <span id="healthCheckedAt" style="font-size:12px;color:#6B7280"></span>
+      </div>
+      <div id="healthChecks" style="padding:8px 0">
+        <div class="empty">Loading health checks…</div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-header"><h2>📋 Post an announcement</h2></div>
+      <div style="padding:16px;display:flex;flex-direction:column;gap:10px">
+        <input id="announcementTitle" type="text" placeholder="Title — e.g. 🐛 Bug fix: sticker quantities" style="padding:10px 12px;border-radius:8px;border:1px solid #E5E7EB;font-size:14px;width:100%;box-sizing:border-box" />
+        <textarea id="announcementBody" rows="4" placeholder="Describe what changed — users will see this in the What's new panel (📋 icon in the header)" style="padding:10px 12px;border-radius:8px;border:1px solid #E5E7EB;font-size:13px;width:100%;box-sizing:border-box;font-family:inherit;resize:vertical"></textarea>
+        <button class="btn-primary" onclick="postAnnouncement()">Post announcement</button>
+        <button class="btn-small btn-secondary" onclick="testPush()" style="margin-top:4px">🔔 Test push (to you only)</button>
+        <div id="announcementResult" style="font-size:13px;color:#6B7280"></div>
+      </div>
+      <div id="announcementsList" style="border-top:1px solid #F3F4F6"></div>
+    </div>
+
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-header">
+        <h2>🤖 Auto-nudge inactive users</h2>
+        <button class="btn-small btn-primary" onclick="autoNudge()" id="nudgeBtn">Run now</button>
+      </div>
+      <p style="padding:10px 18px;font-size:13px;color:#6B7280;margin:0" id="nudgeResult">
+        Sends a notification to users who haven't logged in for 7+ days and have stickers listed. Safe to run anytime — won't spam the same user more than once per week.
+      </p>
+    </div>
+
+    <div class="stats-grid" id="overviewStats">
+      <div class="stat-card"><div class="stat-label">Total users</div><div class="stat-value" id="stat-total-users">—</div></div>
+      <div class="stat-card"><div class="stat-label">Active last 7 days</div><div class="stat-value" id="stat-active-7d">—</div></div>
+      <div class="stat-card"><div class="stat-label">Total swaps</div><div class="stat-value" id="stat-total-swaps">—</div></div>
+      <div class="stat-card"><div class="stat-label">Completed swaps</div><div class="stat-value" id="stat-completed">—</div></div>
+      <div class="stat-card"><div class="stat-label">New users (7d)</div><div class="stat-value" id="stat-new-7d">—</div></div>
+      <div class="stat-card"><div class="stat-label">Active last 24h</div><div class="stat-value" id="stat-active-24h">—</div></div>
+      <div class="stat-card"><div class="stat-label">Active swaps</div><div class="stat-value" id="stat-active-swaps">—</div></div>
+      <div class="stat-card"><div class="stat-label">Pending matches</div><div class="stat-value" id="stat-matches">—</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><h2>📢 Send announcement to all users</h2></div>
+      <div style="padding:16px 18px;display:flex;flex-direction:column;gap:10px">
+        <p style="font-size:13px;color:#6B7280;margin:0">This sends a notification to every active user's bell icon immediately.</p>
+        <input type="text" id="broadcastTitle" placeholder="Title (e.g. New features added!)" style="margin:0" />
+        <textarea id="broadcastBody" placeholder="Optional message (e.g. You can now bulk add stickers by team — try it on your dashboard!)" rows="3" style="padding:10px 14px;border-radius:8px;border:1px solid rgba(0,0,0,0.12);font-size:13px;font-family:inherit;resize:vertical"></textarea>
+        <div style="display:flex;gap:10px;align-items:center">
+          <button class="btn-primary" onclick="sendBroadcast()">Send to all users</button>
+          <button class="btn-small btn-secondary" onclick="testBroadcastPush()" style="margin-left:8px">🔔 Test push (to you only)</button>
+          <span id="broadcastResult" style="font-size:13px;color:#1AAB8A"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ANALYTICS -->
+  <div id="panel-analytics" class="panel">
+
+    <!-- Live map -->
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-header">
+        <h2>🗺️ Live user map <span style="font-size:12px;font-weight:400;color:#6B7280">(active last 24h)</span></h2>
+        <button class="btn-small btn-secondary" onclick="loadLiveMap()">Refresh map</button>
+      </div>
+      <div id="liveMap" style="height:400px;border-radius:0 0 8px 8px;overflow:hidden;z-index:1"></div>
+      <div id="mapLegend" style="padding:8px 16px;font-size:12px;color:#6B7280;border-top:1px solid rgba(0,0,0,0.06)"></div>
+    </div>
+
+    <!-- Charts row -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+      <div class="card">
+        <div class="card-header"><h2>📈 Daily signups (30 days)</h2></div>
+        <div style="padding:16px"><canvas id="signupChart" height="160"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><h2>👥 Daily active users (30 days)</h2></div>
+        <div style="padding:16px"><canvas id="dauChart" height="160"></canvas></div>
+      </div>
+    </div>
+
+    <!-- Swap funnel -->
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-header"><h2>🔄 Swap pipeline</h2></div>
+      <div id="swapFunnel" style="padding:16px"></div>
+    </div>
+
+    <!-- Sticker heatmap -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+      <div class="card">
+        <div class="card-header"><h2>🔥 Most wanted stickers</h2></div>
+        <div id="mostNeeded"></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><h2>📦 Most duplicated stickers</h2></div>
+        <div id="mostDuplicated"></div>
+      </div>
+    </div>
+
+    <!-- Top traders + Oldest pending -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+      <div class="card">
+        <div class="card-header"><h2>🏆 Top traders</h2></div>
+        <div id="topTraders"></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><h2>⏳ Longest pending swaps</h2></div>
+        <div id="oldestPending"></div>
+      </div>
+    </div>
+
+    <!-- Zero stickers -->
+    <div class="card">
+      <div class="card-header">
+        <h2>😴 Users with no stickers listed</h2>
+        <span id="zeroStickersCount" style="font-size:13px;color:#6B7280"></span>
+      </div>
+      <div id="zeroStickers"></div>
+    </div>
+
+  </div>
+
+  <!-- USERS & ANALYTICS -->
+  <div id="panel-users" class="panel">
+    <div class="card">
+      <div class="card-header">
+        <h2>All users</h2>
+        <input type="text" id="userSearch" placeholder="Search name or email…" oninput="filterUsers()" />
+      </div>
+      <div id="usersTable"></div>
+    </div>
+  </div>
+
+  <!-- MESSAGES -->
+  <div id="panel-messages" class="panel">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+
+      <div class="card">
+        <div class="card-header">
+          <h2>💬 All conversations</h2>
+          <span id="convCount" style="font-size:13px;color:#6B7280"></span>
+        </div>
+        <div id="convList"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h2>🚨 Reported messages</h2>
+          <span id="reportedMsgCount" style="font-size:13px;color:#6B7280"></span>
+        </div>
+        <div id="reportedMsgList"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><h2>✉️ Send message to user</h2></div>
+      <div style="padding:16px;display:flex;flex-direction:column;gap:10px">
+        <div style="position:relative">
+          <input id="msgUserSearch" type="text" placeholder="Search by name or email…" oninput="filterMsgUsers()" onfocus="showMsgDropdown()" style="padding:10px 12px;border-radius:8px;border:1px solid #E5E7EB;font-size:14px;width:100%;box-sizing:border-box" />
+          <div id="msgDropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:white;border:1px solid #E5E7EB;border-radius:8px;max-height:220px;overflow-y:auto;z-index:100;box-shadow:0 4px 12px rgba(0,0,0,0.1);margin-top:2px"></div>
+        </div>
+        <input id="msgRecipientId" type="hidden" />
+        <div id="msgSelectedUser" style="display:none;padding:8px 12px;background:#F0FDF4;border:1px solid #A7F3D0;border-radius:8px;font-size:13px;color:#065F46;display:flex;align-items:center;justify-content:space-between">
+          <span id="msgSelectedName"></span>
+          <button onclick="clearMsgUser()" style="font-size:16px;color:#065F46;background:none;border:none;cursor:pointer;line-height:1">×</button>
+        </div>
+        <textarea id="msgBody" rows="3" placeholder="Your message…" style="padding:10px 12px;border-radius:8px;border:1px solid #E5E7EB;font-size:13px;width:100%;box-sizing:border-box;font-family:inherit;resize:vertical"></textarea>
+        <button class="btn-primary" onclick="adminSendMessage()">Send message</button>
+        <div id="msgResult" style="font-size:13px;color:#6B7280"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SWAPS -->
+  <div id="panel-swaps" class="panel">
+    <div class="card">
+      <div class="card-header">
+        <h2>All swaps</h2>
+        <div style="display:flex;gap:4px;flex-wrap:wrap">
+          <button class="tab active" id="swap-tab-all" onclick="switchSwapTab('')" style="flex:none;padding:5px 12px">All</button>
+          <button class="tab" id="swap-tab-proposed" onclick="switchSwapTab('proposed')" style="flex:none;padding:5px 12px">Proposed</button>
+          <button class="tab" id="swap-tab-accepted" onclick="switchSwapTab('accepted')" style="flex:none;padding:5px 12px">Accepted</button>
+          <button class="tab" id="swap-tab-posted" onclick="switchSwapTab('posted')" style="flex:none;padding:5px 12px">Posted</button>
+          <button class="tab" id="swap-tab-completed" onclick="switchSwapTab('completed')" style="flex:none;padding:5px 12px">Completed</button>
+          <button class="tab" id="swap-tab-declined" onclick="switchSwapTab('declined')" style="flex:none;padding:5px 12px">Declined</button>
+          <button class="tab" id="swap-tab-disputed" onclick="switchSwapTab('disputed')" style="flex:none;padding:5px 12px">Disputed</button>
+        </div>
+      </div>
+      <div id="swapsTable"></div>
+    </div>
+  </div>
+
+  <!-- MODERATION -->
+  <div id="panel-moderation" class="panel">
+
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-header"><h2>🚨 Fraud flags</h2><span id="fraudCount" style="font-size:13px;color:#6B7280"></span></div>
+      <p style="padding:8px 18px 0;font-size:13px;color:#6B7280;margin:0">Users with stuck swaps, disputes, or no-show reports.</p>
+      <div id="fraudFlagsList"></div>
+    </div>
+
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-header"><h2>📋 No-show reports</h2><span id="noShowCount" style="font-size:13px;color:#6B7280"></span></div>
+      <div id="noShowList"></div>
+    </div>
+
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-header"><h2>🚩 Reported users</h2></div>
+      <div id="reportedUsersList"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><h2>⚖️ Disputes</h2></div>
+      <div id="disputesList"></div>
+    </div>
+  </div>
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-header"><h2>Reported users</h2></div>
+      <div id="reportedUsersTable"></div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <h2>Disputes</h2>
+        <select id="disputeFilter" onchange="loadDisputes()">
+          <option value="">All statuses</option>
+          <option value="open">Open</option>
+          <option value="reviewing">Reviewing</option>
+          <option value="resolved">Resolved</option>
+          <option value="dismissed">Dismissed</option>
+        </select>
+      </div>
+      <div id="disputesTable"></div>
+    </div>
+  </div>
+
+  <!-- INVITES -->
+  <div id="panel-invites" class="panel">
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-header">
+        <h2>Generate invite code</h2>
+      </div>
+      <div style="padding:16px 18px;display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <input type="text" id="inviteName" placeholder="Person's name (e.g. Sarah Jones)" style="flex:1;min-width:180px;margin:0" />
+          <button class="btn-primary" onclick="generateSingleCode()">Generate &amp; copy code</button>
+        </div>
+        <p style="font-size:12px;color:#6B7280;margin:0">Enter the person's name first, then click Generate. The code copies to your clipboard automatically so you can paste it straight into your message.</p>
+      </div>
+      <div id="generatedCode" style="display:none;padding:12px 18px;background:#D1FAE5;border-top:1px solid rgba(0,0,0,0.06)">
+        <span style="font-size:13px;color:#065F46">✓ Code generated and copied: </span>
+        <strong id="generatedCodeValue" style="font-family:monospace;font-size:16px;letter-spacing:0.15em"></strong>
+        <span style="font-size:13px;color:#065F46"> for </span>
+        <strong id="generatedCodeName" style="font-size:13px;color:#065F46"></strong>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header"><h2>All invite codes</h2><span id="inviteSummary" style="font-size:13px;color:#6B7280"></span></div>
+      <div id="inviteGrid"></div>
+    </div>
+  </div>
+
+  <!-- DONATIONS -->
+  <div id="panel-donations" class="panel">
+    <div class="card">
+      <div class="card-header">
+        <h2>☕ Donation clicks</h2>
+        <span id="donationCount" style="font-size:13px;color:#6B7280"></span>
+      </div>
+      <p style="padding:10px 18px 0;font-size:13px;color:#6B7280;margin:0">
+        These are people who clicked a donate button. They were redirected to Stripe — check your Stripe dashboard for actual payments.
+      </p>
+      <div id="donationsList"></div>
+    </div>
+  </div>
+
+  <!-- FEEDBACK -->
+  <div id="panel-feedback" class="panel">
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-header"><h2>🚀 Future Collection Interest</h2><button class="btn-small btn-secondary" onclick="loadFutureCollections()">Refresh</button></div>
+      <div id="futureCollectionsList" style="padding:16px"></div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <h2>User feedback</h2>
+        <div style="display:flex;gap:4px">
+          <button class="tab active" id="ftab-pending" onclick="switchFeedbackTab('pending')" style="flex:none;padding:5px 12px">Pending</button>
+          <button class="tab" id="ftab-fixed" onclick="switchFeedbackTab('fixed')" style="flex:none;padding:5px 12px">Fixed</button>
+          <button class="tab" id="ftab-declined" onclick="switchFeedbackTab('declined')" style="flex:none;padding:5px 12px">Declined</button>
+        </div>
+      </div>
+      <div id="feedbackList"></div>
+    </div>
+  </div>
+</div>
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+const API_BASE = 'https://panini-swap-production-69ef.up.railway.app/api';
+let adminSecret = '';
+let allUsers = [];
+
+function showTab(name) {
+  document.querySelectorAll('.tabs .tab').forEach((t, i) => {
+    const panels = ['overview','analytics','users','swaps','messages','moderation','invites','feedback','donations'];
+    t.classList.toggle('active', panels[i] === name);
+  });
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('panel-' + name).classList.add('active');
+  if (name === 'swaps') loadSwaps();
+  if (name === 'donations') loadDonations();
+  if (name === 'moderation') { loadReportedUsers(); loadDisputes(); loadFraudFlags(); loadNoShowReports(); }
+  if (name === 'messages') loadAdminMessages();
+  if (name === 'analytics') {
+    loadAnalytics();
+    // Leaflet maps initialised in hidden panels don't know their size.
+    // Invalidate after a short delay to let the panel render first.
+    setTimeout(() => { if (leafletMap) leafletMap.invalidateSize(); }, 100);
+  }
+}
+
+async function adminFetch(path, opts = {}) {
+  // HTTP headers must only contain ISO-8859-1 characters.
+  // Strip anything outside that range before sending.
+  const safeSecret = adminSecret.replace(/[^\x20-\x7E]/g, '').trim();
+  const res = await fetch(`${API_BASE}${path}`, {
+    ...opts,
+    headers: { 'Content-Type': 'application/json', 'X-Admin-Secret': safeSecret, ...(opts.headers||{}) },
+  });
+  if (!res.ok) { const b = await res.json().catch(()=>{}); throw new Error(b?.error||`Error ${res.status}`); }
+  return res.json();
+}
+
+async function login() {
+  adminSecret = document.getElementById('secretInput').value.replace(/[^\x20-\x7E]/g, '').trim();
+  if (!adminSecret) return;
+  try {
+    // Verify the secret with a lightweight call before showing the dashboard
+    await adminFetch('/admin/overview');
+    document.getElementById('login').style.display = 'none';
+    document.getElementById('dashboard').style.display = 'block';
+    // Load all panels in the background — failures won't block the dashboard showing
+    refreshAll();
+  } catch(e) {
+    document.getElementById('loginError').textContent = 'Invalid secret or server unreachable.';
+  }
+}
+
+async function handleRefresh() {
+  const btn = document.getElementById('refreshBtn');
+  btn.textContent = '↻ Refreshing…';
+  btn.disabled = true;
+  await refreshAll();
+  btn.textContent = '↻ Refresh';
+  btn.disabled = false;
+}
+
+async function refreshAll() {
+  // Run all loaders independently — if one fails it shouldn't block the rest.
+  // Previously a single failing endpoint (e.g. analytics) would silently
+  // cause the whole refresh to appear to do nothing.
+  await Promise.allSettled([
+    loadOverview(),
+    loadUsers(),
+    loadSwaps(),
+    loadReportedUsers(),
+    loadDisputes(),
+    loadInvites(),
+    loadFeedback(),
+    loadDonations(),
+    loadAnalytics(),
+    loadHealth(),
+    loadFraudFlags(),
+    loadNoShowReports(),
+    loadFutureCollections(),
+    loadAnnouncements(),
+    loadAdminMessages(),
+    loadErrorLog(),
+  ]);
+}
+
+async function sendBroadcast() {
+  const title = document.getElementById('broadcastTitle').value.trim();
+  const body = document.getElementById('broadcastBody').value.trim();
+  const resultEl = document.getElementById('broadcastResult');
+  if (!title) { alert('Please enter a title for the announcement.'); return; }
+  if (!confirm(`Send "${title}" to ALL active users? This will appear in everyone's notification bell immediately.`)) return;
+  try {
+    const { sent } = await adminFetch('/admin/broadcast', {
+      method: 'POST',
+      body: JSON.stringify({ title, body, type: 'announcement' }),
+    });
+    resultEl.textContent = `✓ Sent to ${sent} users`;
+    document.getElementById('broadcastTitle').value = '';
+    document.getElementById('broadcastBody').value = '';
+    setTimeout(() => { resultEl.textContent = ''; }, 4000);
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+let currentSwapFilter = '';
+
+function switchSwapTab(status) {
+  currentSwapFilter = status;
+  document.querySelectorAll('[id^="swap-tab-"]').forEach(el => el.classList.remove('active'));
+  document.getElementById(`swap-tab-${status || 'all'}`).classList.add('active');
+  loadSwaps();
+}
+
+async function loadSwaps() {
+  try {
+    const url = currentSwapFilter ? `/admin/swaps?status=${currentSwapFilter}` : '/admin/swaps';
+    const swaps = await adminFetch(url);
+    const el = document.getElementById('swapsTable');
+    if (!swaps.length) { el.innerHTML = `<div class="empty">No ${currentSwapFilter || ''} swaps found.</div>`; return; }
+
+    const STATUS_COLORS = {
+      proposed: 'badge-amber',
+      accepted: 'badge-blue',
+      posted: 'badge-blue',
+      completed: 'badge-green',
+      declined: 'badge-grey',
+      disputed: 'badge-red',
+    };
+
+    const STATUS_LABELS = {
+      proposed: 'Proposed',
+      accepted: 'Accepted',
+      posted: 'Posted',
+      completed: 'Completed',
+      declined: 'Declined',
+      disputed: 'Disputed',
+    };
+
+    el.innerHTML = `<table>
+      <thead><tr>
+        <th>#</th>
+        <th>Users</th>
+        <th>Stickers</th>
+        <th>Status</th>
+        <th>Progress</th>
+        <th>Updated</th>
+      </tr></thead>
+      <tbody>${swaps.map(s => {
+        const statusBadge = STATUS_COLORS[s.status] || 'badge-grey';
+        const statusLabel = STATUS_LABELS[s.status] || s.status;
+
+        // Build a human-readable progress string
+        let progress = '';
+        if (s.status === 'proposed') {
+          const aAcc = s.user_a_accepted ? `✓ ${e(s.user_a_name)}` : `⏳ ${e(s.user_a_name)}`;
+          const bAcc = s.user_b_accepted ? `✓ ${e(s.user_b_name)}` : `⏳ ${e(s.user_b_name)}`;
+          progress = `Accept: ${aAcc} / ${bAcc}`;
+        } else if (s.status === 'accepted' || s.status === 'posted') {
+          const aPost = s.user_a_posted ? `✓ ${e(s.user_a_name)}` : `⏳ ${e(s.user_a_name)}`;
+          const bPost = s.user_b_posted ? `✓ ${e(s.user_b_name)}` : `⏳ ${e(s.user_b_name)}`;
+          progress = `Posted: ${aPost} / ${bPost}`;
+        } else if (s.status === 'completed') {
+          progress = '✓ Both received';
+        } else if (s.status === 'declined') {
+          progress = `Swap declined${s.decline_reason ? `: "${e(s.decline_reason)}"` : ' (no reason given)'}`;
+        } else if (s.status === 'disputed') {
+          progress = '⚠️ Dispute filed';
+        }
+
+        return `<tr>
+          <td style="font-family:monospace;color:#6B7280">#${s.id}</td>
+          <td>
+            <div style="font-weight:600;font-size:13px">${e(s.user_a_name)}</div>
+            <div style="color:#6B7280;font-size:11px">${e(s.user_a_email)}</div>
+            <div style="color:#9CA3AF;font-size:11px;margin:3px 0">↕ with</div>
+            <div style="font-weight:600;font-size:13px">${e(s.user_b_name)}</div>
+            <div style="color:#6B7280;font-size:11px">${e(s.user_b_email)}</div>
+          </td>
+          <td style="text-align:center">
+            <div style="font-size:20px;font-weight:700;color:#1AAB8A">${s.total_stickers || '—'}</div>
+            <div style="font-size:11px;color:#9CA3AF">${s.total_stickers > 0 ? `${s.a_gives} ↔ ${s.b_gives}` : 'confirmed on accept'}</div>
+          </td>
+          <td><span class="badge ${statusBadge}">${statusLabel}</span></td>
+          <td style="font-size:12px;color:#6B7280;max-width:180px">${progress}</td>
+          <td style="font-size:12px;color:#9CA3AF;white-space:nowrap">${new Date(s.updated_at).toLocaleString()}</td>
+        </tr>`;
+      }).join('')}
+      </tbody></table>`;
+  } catch(err) {
+    document.getElementById('swapsTable').innerHTML = `<div class="empty">Error: ${err.message}</div>`;
+  }
+}
+
+async function loadAdminMessages() {
+  try {
+    const [convs, reported] = await Promise.all([
+      adminFetch('/admin/messages'),
+      adminFetch('/admin/reported-messages'),
+    ]);
+
+    document.getElementById('convCount').textContent = `${convs.length} conversations`;
+    const convEl = document.getElementById('convList');
+    if (!convs.length) { convEl.innerHTML = '<div class="empty">No conversations yet.</div>'; }
+    else {
+      convEl.innerHTML = `<table>
+        <thead><tr><th>Users</th><th>Messages</th><th>Reported</th><th>Last active</th><th></th></tr></thead>
+        <tbody>${convs.map(c => `<tr>
+          <td><strong>${e(c.user_a_name)}</strong> ↔ <strong>${e(c.user_b_name)}</strong></td>
+          <td>${c.message_count}</td>
+          <td style="color:${c.reported_count > 0 ? '#EF4444' : '#6B7280'}">${c.reported_count}</td>
+          <td style="font-size:12px;color:#6B7280">${c.last_message_at ? new Date(c.last_message_at).toLocaleDateString() : '—'}</td>
+          <td><button class="btn-small btn-secondary" onclick="viewConversation(${c.conversation_id}, '${e(c.user_a_name)} ↔ ${e(c.user_b_name)}')">View</button></td>
+        </tr>`).join('')}
+        </tbody></table>`;
+    }
+
+    document.getElementById('reportedMsgCount').textContent = `${reported.length} reports`;
+    const repEl = document.getElementById('reportedMsgList');
+    if (!reported.length) { repEl.innerHTML = '<div class="empty">No reported messages. ✅</div>'; }
+    else {
+      repEl.innerHTML = reported.map(m => `
+        <div style="padding:12px 16px;border-bottom:1px solid rgba(0,0,0,0.05)">
+          <div style="font-size:12px;color:#6B7280;margin-bottom:4px"><strong>${e(m.sender_name)}</strong> → ${e(m.recipient_name)} · ${new Date(m.created_at).toLocaleDateString()}</div>
+          <div style="font-size:13px;color:#1A1F36;background:#FEF2F2;padding:8px;border-radius:6px">${e(m.body)}</div>
+          ${m.report_reason ? `<div style="font-size:11px;color:#6B7280;margin-top:4px">Reason: ${e(m.report_reason)}</div>` : ''}
+        </div>`).join('');
+    }
+  } catch(err) {
+    document.getElementById('convList').innerHTML = `<div class="empty">Error: ${err.message}</div>`;
+  }
+}
+
+async function viewConversation(convId, title) {
+  try {
+    const msgs = await adminFetch(`/admin/messages/${convId}`);
+    const html = msgs.map(m => `
+      <div style="margin-bottom:10px">
+        <div style="font-size:11px;color:#6B7280;margin-bottom:3px">${e(m.sender_name)} · ${new Date(m.created_at).toLocaleString()}</div>
+        <div style="font-size:13px;padding:8px 12px;background:#F3F4F6;border-radius:8px;display:inline-block;max-width:90%">${e(m.body)}</div>
+      </div>`).join('');
+    const win = window.open('', '_blank', 'width=500,height=600');
+    win.document.write(`<html><head><title>${title}</title><style>body{font-family:system-ui;padding:20px;}</style></head><body><h3>${title}</h3>${html}</body></html>`);
+  } catch(err) { alert('Error: ' + err.message); }
+}
+
+function showMsgDropdown() {
+  filterMsgUsers();
+  document.getElementById('msgDropdown').style.display = 'block';
+}
+
+function filterMsgUsers() {
+  const q = document.getElementById('msgUserSearch').value.toLowerCase();
+  const dropdown = document.getElementById('msgDropdown');
+  const filtered = allUsers.filter(u =>
+    !q || u.name?.toLowerCase().includes(q) || u.email?.toLowerCase().includes(q)
+  ).slice(0, 50);
+
+  if (!filtered.length) {
+    dropdown.innerHTML = '<div style="padding:10px 14px;font-size:13px;color:#9CA3AF">No users found</div>';
+  } else {
+    dropdown.innerHTML = filtered.map(u => `
+      <div onclick="selectMsgUser(${u.id}, '${e(u.name)} (${e(u.email)})')"
+           style="padding:9px 14px;font-size:13px;cursor:pointer;border-bottom:1px solid #F3F4F6;display:flex;justify-content:space-between;align-items:center"
+           onmouseover="this.style.background='#F9FAFB'" onmouseout="this.style.background='white'">
+        <span style="font-weight:600;color:#111">${e(u.name)}</span>
+        <span style="color:#9CA3AF;font-size:12px">${e(u.email)}</span>
+      </div>
+    `).join('');
+  }
+  dropdown.style.display = 'block';
+}
+
+function selectMsgUser(id, label) {
+  document.getElementById('msgRecipientId').value = id;
+  document.getElementById('msgUserSearch').value = '';
+  document.getElementById('msgDropdown').style.display = 'none';
+  const sel = document.getElementById('msgSelectedUser');
+  document.getElementById('msgSelectedName').textContent = label;
+  sel.style.display = 'flex';
+}
+
+function clearMsgUser() {
+  document.getElementById('msgRecipientId').value = '';
+  document.getElementById('msgUserSearch').value = '';
+  document.getElementById('msgSelectedUser').style.display = 'none';
+}
+
+// Close dropdown when clicking outside
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('#msgUserSearch') && !e.target.closest('#msgDropdown')) {
+    const dd = document.getElementById('msgDropdown');
+    if (dd) dd.style.display = 'none';
+  }
+});
+
+async function adminSendMessage() {
+  const recipientId = document.getElementById('msgRecipientId').value.trim();
+  const body = document.getElementById('msgBody').value.trim();
+  const result = document.getElementById('msgResult');
+  if (!recipientId || !body) { result.textContent = 'Please select a user and enter a message.'; return; }
+  try {
+    await adminFetch('/admin/messages/send', { method: 'POST', body: JSON.stringify({ recipientId: parseInt(recipientId), body }) });
+    clearMsgUser();
+    document.getElementById('msgBody').value = '';
+    result.style.color = '#065F46';
+    result.textContent = '✓ Message sent!';
+    setTimeout(() => { result.textContent = ''; }, 3000);
+  } catch(err) {
+    result.style.color = '#DC2626';
+    result.textContent = 'Error: ' + err.message;
+  }
+}
+
+async function loadDonations() {
+  try {
+    const items = await adminFetch('/donations');
+    document.getElementById('donationCount').textContent = `${items.length} clicks`;
+    const el = document.getElementById('donationsList');
+    if (!items.length) { el.innerHTML = '<div class="empty">No donation clicks yet.</div>'; return; }
+
+    const LOCATION_LABELS = {
+      swap_confirmed: '🎉 Swap confirmed',
+      dashboard: '📊 Dashboard',
+      footer: '🔗 Footer link',
+    };
+
+    el.innerHTML = `<table>
+      <thead><tr>
+        <th>User</th>
+        <th>Button location</th>
+        <th>When</th>
+      </tr></thead>
+      <tbody>${items.map(d => `<tr>
+        <td>
+          ${d.user_name
+            ? `<strong>${e(d.user_name)}</strong><div style="font-size:11px;color:#6B7280">${e(d.user_email || '')}</div>`
+            : '<span style="color:#9CA3AF">Anonymous</span>'
+          }
+        </td>
+        <td><span class="badge badge-blue">${e(LOCATION_LABELS[d.location] || d.location)}</span></td>
+        <td style="font-size:12px;color:#6B7280">${new Date(d.clicked_at).toLocaleString()}</td>
+      </tr>`).join('')}
+      </tbody></table>`;
+  } catch(err) {
+    document.getElementById('donationsList').innerHTML = `<div class="empty">Error: ${err.message}</div>`;
+  }
+}
+
+let signupChartInstance = null;
+let dauChartInstance = null;
+
+function drawBarChart(canvasId, labels, data, label, colour, instanceRef) {
+  const ctx = document.getElementById(canvasId)?.getContext('2d');
+  if (!ctx) return;
+  if (instanceRef.current) instanceRef.current.destroy();
+  instanceRef.current = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{ label, data, backgroundColor: colour, borderRadius: 4 }],
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { beginAtZero: true, ticks: { precision: 0 } },
+        x: { ticks: { maxTicksLimit: 10, font: { size: 10 } } },
+      },
+    },
+  });
+}
+
+async function loadAnalytics() {
+  await Promise.allSettled([
+    loadSignupChart(),
+    loadDauChart(),
+    loadSwapFunnelChart(),
+    loadStickerHeatmap(),
+    loadTopTraders(),
+    loadOldestPending(),
+    loadZeroStickers(),
+    loadLiveMap(),
+  ]);
+}
+
+async function loadSignupChart() {
+  try {
+    const data = await adminFetch('/admin/signups-chart');
+    const ref = { current: signupChartInstance };
+    drawBarChart('signupChart',
+      data.map(d => new Date(d.date).toLocaleDateString('en-GB', { day:'numeric', month:'short' })),
+      data.map(d => d.count),
+      'New signups', '#1AAB8A', ref
+    );
+    signupChartInstance = ref.current;
+  } catch(e) { console.error('signup chart', e); }
+}
+
+async function loadDauChart() {
+  try {
+    const data = await adminFetch('/admin/dau-chart');
+    const ref = { current: dauChartInstance };
+    drawBarChart('dauChart',
+      data.map(d => new Date(d.date).toLocaleDateString('en-GB', { day:'numeric', month:'short' })),
+      data.map(d => d.active_users),
+      'Active users', '#6366F1', ref
+    );
+    dauChartInstance = ref.current;
+  } catch(e) { console.error('dau chart', e); }
+}
+
+async function loadSwapFunnelChart() {
+  try {
+    const data = await adminFetch('/admin/swap-funnel');
+    const el = document.getElementById('swapFunnel');
+    const colours = { proposed:'#F59E0B', accepted:'#6366F1', posted:'#3B82F6', completed:'#1AAB8A', declined:'#9CA3AF', disputed:'#EF4444' };
+    const max = Math.max(...data.map(d => parseInt(d.count)), 1);
+    el.innerHTML = data.map(d => `
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+        <div style="width:90px;font-size:12px;font-weight:600;text-transform:capitalize;color:#374151">${d.status}</div>
+        <div style="flex:1;background:#F3F4F6;border-radius:6px;height:28px;overflow:hidden">
+          <div style="height:100%;width:${Math.max(2, Math.round(d.count/max*100))}%;background:${colours[d.status]||'#9CA3AF'};border-radius:6px;display:flex;align-items:center;padding-left:10px;transition:width 0.5s">
+            <span style="font-size:12px;font-weight:700;color:white">${d.count}</span>
+          </div>
+        </div>
+      </div>`).join('');
+  } catch(e) { console.error('funnel', e); }
+}
+
+async function loadStickerHeatmap() {
+  try {
+    const { mostNeeded, mostDuplicated } = await adminFetch('/admin/sticker-heatmap');
+    const renderList = (items, countKey, countLabel, elId) => {
+      const el = document.getElementById(elId);
+      const max = Math.max(...items.map(i => parseInt(i[countKey])), 1);
+      el.innerHTML = items.map((s, i) => `
+        <div style="padding:8px 16px;border-bottom:1px solid rgba(0,0,0,0.05);display:flex;align-items:center;gap:10px">
+          <div style="width:22px;font-size:11px;color:#9CA3AF;font-weight:700">#${i+1}</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:12px;font-weight:600;color:#1A1F36">${e(s.sticker_number)} <span style="color:#6B7280;font-weight:400">${e(s.description)}</span></div>
+            <div style="font-size:11px;color:#9CA3AF">${e(s.team_name)}</div>
+            <div style="height:4px;background:#F3F4F6;border-radius:2px;margin-top:4px">
+              <div style="height:100%;width:${Math.round(parseInt(s[countKey])/max*100)}%;background:#1AAB8A;border-radius:2px"></div>
+            </div>
+          </div>
+          <div style="font-size:13px;font-weight:700;color:#1AAB8A;flex-shrink:0">${s[countKey]}</div>
+        </div>`).join('');
+    };
+    renderList(mostNeeded, 'want_count', 'want', 'mostNeeded');
+    renderList(mostDuplicated, 'have_count', 'have', 'mostDuplicated');
+  } catch(e) { console.error('heatmap', e); }
+}
+
+async function loadTopTraders() {
+  try {
+    const data = await adminFetch('/admin/top-traders');
+    const el = document.getElementById('topTraders');
+    if (!data.length) { el.innerHTML = '<div class="empty">No completed swaps yet.</div>'; return; }
+    el.innerHTML = data.map((u, i) => `
+      <div style="padding:10px 16px;border-bottom:1px solid rgba(0,0,0,0.05);display:flex;align-items:center;gap:10px">
+        <div style="width:24px;height:24px;border-radius:50%;background:${i===0?'#F59E0B':i===1?'#9CA3AF':i===2?'#CD7F32':'#E5E7EB'};display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:${i<3?'white':'#6B7280'}">${i+1}</div>
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:600;color:#1A1F36">${e(u.name)}</div>
+          <div style="font-size:11px;color:#6B7280">${e(u.email)}</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:14px;font-weight:700;color:#1AAB8A">${u.completed_swaps} swaps</div>
+          ${u.avg_rating ? `<div style="font-size:11px;color:#F59E0B">${'★'.repeat(Math.round(u.avg_rating))} ${u.avg_rating}</div>` : ''}
+        </div>
+      </div>`).join('');
+  } catch(e) { console.error('top traders', e); }
+}
+
+async function loadOldestPending() {
+  try {
+    const data = await adminFetch('/admin/oldest-pending');
+    const el = document.getElementById('oldestPending');
+    if (!data.length) { el.innerHTML = '<div class="empty">No pending swaps.</div>'; return; }
+    el.innerHTML = data.map(s => {
+      const days = Math.round(parseFloat(s.days_old));
+      const urgency = days > 7 ? '#EF4444' : days > 3 ? '#F59E0B' : '#1AAB8A';
+      const aAcc = s.user_a_accepted ? '✓' : '⏳';
+      const bAcc = s.user_b_accepted ? '✓' : '⏳';
+      return `
+      <div style="padding:10px 16px;border-bottom:1px solid rgba(0,0,0,0.05)">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div style="font-size:12px;color:#374151">
+            <strong>${e(s.user_a_name)}</strong> ${aAcc} ↔ ${bAcc} <strong>${e(s.user_b_name)}</strong>
+          </div>
+          <span style="font-size:12px;font-weight:700;color:${urgency};flex-shrink:0;margin-left:8px">${days}d old</span>
+        </div>
+        <div style="font-size:11px;color:#9CA3AF;margin-top:2px">Swap #${s.id} · Created ${new Date(s.created_at).toLocaleDateString()}</div>
+      </div>`;
+    }).join('');
+  } catch(e) { console.error('oldest pending', e); }
+}
+
+async function loadZeroStickers() {
+  try {
+    const data = await adminFetch('/admin/zero-stickers');
+    document.getElementById('zeroStickersCount').textContent = `${data.length} users`;
+    const el = document.getElementById('zeroStickers');
+    if (!data.length) { el.innerHTML = '<div class="empty">Everyone has added stickers. 🎉</div>'; return; }
+    el.innerHTML = `<table>
+      <thead><tr><th>User</th><th>Joined</th><th>Last login</th><th>Logins</th><th></th></tr></thead>
+      <tbody>${data.map(u => `<tr>
+        <td><strong>${e(u.name)}</strong><div style="font-size:11px;color:#6B7280">${e(u.email)}</div></td>
+        <td style="font-size:12px">${new Date(u.created_at).toLocaleDateString()}</td>
+        <td style="font-size:12px">${u.last_login_at ? new Date(u.last_login_at).toLocaleDateString() : 'Never'}</td>
+        <td>${u.login_count || 0}</td>
+        <td><button class="btn-small btn-primary" onclick="nudgeUser('${e(u.email)}', ${u.id})">Nudge</button></td>
+      </tr>`).join('')}
+      </tbody></table>`;
+  } catch(e) { console.error('zero stickers', e); }
+}
+
+async function nudgeUser(email, userId) {
+  if (!confirm(`Send a notification nudging ${email} to add their stickers?`)) return;
+  try {
+    await adminFetch('/admin/broadcast-one', {
+      method: 'POST',
+      body: JSON.stringify({
+        userId,
+        title: '👋 Don\'t forget to add your stickers!',
+        body: 'You\'re signed up but haven\'t listed any stickers yet. Add your duplicates and needs to start getting matched for swaps!',
+      }),
+    });
+    alert('✓ Nudge sent!');
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+let leafletMap = null;
+let mapMarkers = [];
+
+async function loadLiveMap() {
+  try {
+    const users = await adminFetch('/admin/live-locations');
+
+    // Initialise Leaflet map on first load
+    if (!leafletMap) {
+      leafletMap = L.map('liveMap').setView([54, -2], 5); // Centre on UK
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© <a href="https://openstreetmap.org">OpenStreetMap</a>',
+        maxZoom: 18,
+      }).addTo(leafletMap);
+    }
+    // Always invalidate size in case the map was initialised while hidden
+    setTimeout(() => leafletMap.invalidateSize(), 50);
+
+    // Remove old markers
+    mapMarkers.forEach(m => m.remove());
+    mapMarkers = [];
+
+    if (!users.length) {
+      document.getElementById('mapLegend').textContent = 'No location data yet — users will appear here after logging in.';
+      return;
+    }
+
+    users.forEach(u => {
+      const minutesAgo = (Date.now() - new Date(u.last_login_at)) / 60000;
+      const isActive = minutesAgo < 30;
+      const colour = isActive ? '#1AAB8A' : '#6B7280';
+      const size = isActive ? 14 : 10;
+
+      const icon = L.divIcon({
+        className: '',
+        html: `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${colour};border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.3);${isActive ? 'animation:pulse 2s infinite' : ''}"></div>`,
+        iconSize: [size, size],
+        iconAnchor: [size/2, size/2],
+      });
+
+      const marker = L.marker([parseFloat(u.latitude), parseFloat(u.longitude)], { icon })
+        .bindPopup(`
+          <strong>${e(u.name)}</strong><br>
+          ${e(u.city || '')}${u.city && u.country ? ', ' : ''}${e(u.country || '')}<br>
+          <span style="color:#6B7280;font-size:11px">${Math.round(minutesAgo)}m ago · ${u.duplicates_count} spares · ${u.needs_count} needs</span>
+        `)
+        .addTo(leafletMap);
+      mapMarkers.push(marker);
+    });
+
+    // Fit map to show all markers if we have them
+    if (mapMarkers.length > 0) {
+      const group = L.featureGroup(mapMarkers);
+      leafletMap.fitBounds(group.getBounds().pad(0.2));
+    }
+
+    const active = users.filter(u => (Date.now() - new Date(u.last_login_at)) / 60000 < 30).length;
+    document.getElementById('mapLegend').innerHTML =
+      `<span style="display:inline-flex;align-items:center;gap:4px;margin-right:16px">
+        <span style="width:10px;height:10px;border-radius:50%;background:#1AAB8A;display:inline-block"></span>
+        Active last 30 min (${active})
+      </span>
+      <span style="display:inline-flex;align-items:center;gap:4px">
+        <span style="width:8px;height:8px;border-radius:50%;background:#6B7280;display:inline-block"></span>
+        Active last 24h (${users.length})
+      </span>
+      <span style="margin-left:16px;color:#9CA3AF">Click any dot for user details</span>`;
+
+  } catch(err) {
+    document.getElementById('liveMap').innerHTML = `<div style="padding:32px;text-align:center;color:#EF4444">Error loading map: ${err.message}</div>`;
+  }
+}
+
+async function loadHealth() {
+  try {
+    const { checks, overallStatus, checkedAt, responseMs } = await adminFetch('/admin/health');
+    document.getElementById('healthCheckedAt').textContent = `Checked ${new Date(checkedAt).toLocaleTimeString()} · ${responseMs}ms`;
+
+    // Show prominent banner if anything is critical
+    const errors = checks.filter(c => c.status === 'error');
+    const warnings = checks.filter(c => c.status === 'warning');
+    let banner = '';
+    if (errors.length) {
+      banner = `<div style="background:#FEE2E2;border:1px solid #FCA5A5;border-radius:8px;padding:12px 16px;margin-bottom:12px;font-size:13px;font-weight:600;color:#991B1B">
+        🚨 ${errors.length} critical issue${errors.length > 1 ? 's' : ''} detected — action required immediately
+      </div>`;
+    } else if (warnings.length) {
+      banner = `<div style="background:#FEF3C7;border:1px solid #FDE68A;border-radius:8px;padding:12px 16px;margin-bottom:12px;font-size:13px;font-weight:600;color:#92400E">
+        ⚠️ ${warnings.length} warning${warnings.length > 1 ? 's' : ''} — worth investigating
+      </div>`;
+    }
+
+    const STATUS_STYLES = {
+      ok:      { bg: '#D1FAE5', color: '#065F46', icon: '✅' },
+      warning: { bg: '#FEF3C7', color: '#92400E', icon: '⚠️' },
+      error:   { bg: '#FEE2E2', color: '#991B1B', icon: '🚨' },
+    };
+    document.getElementById('healthChecks').innerHTML = banner + checks.map(c => {
+      const s = STATUS_STYLES[c.status] || STATUS_STYLES.ok;
+      return `<div style="display:flex;align-items:flex-start;gap:12px;padding:10px 18px;border-bottom:1px solid rgba(0,0,0,0.05)">
+        <span style="font-size:16px;flex-shrink:0">${s.icon}</span>
+        <div>
+          <div style="font-size:13px;font-weight:600;color:#1A1F36">${e(c.name)}</div>
+          <div style="font-size:12px;color:${s.color};margin-top:2px">${e(c.message)}</div>
+        </div>
+        <span style="margin-left:auto;flex-shrink:0;font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;background:${s.bg};color:${s.color}">${c.status.toUpperCase()}</span>
+      </div>`;
+    }).join('');
+  } catch(err) {
+    document.getElementById('healthChecks').innerHTML = `<div class="empty">Error: ${err.message}</div>`;
+  }
+}
+
+async function testBroadcastPush() {
+  const title = document.getElementById('broadcastTitle').value.trim() || 'Test broadcast';
+  const body = document.getElementById('broadcastBody').value.trim() || 'Push notification test';
+  try {
+    await adminFetch('/admin/test-push', { method: 'POST', body: JSON.stringify({ userId: 1, title: `📢 ${title}`, body }) });
+    alert('Test broadcast push sent! Check your phone.');
+  } catch(err) {
+    alert('Error: ' + err.message);
+  }
+}
+
+async function testPush() {
+  try {
+    await adminFetch('/admin/test-push', { method: 'POST', body: JSON.stringify({ userId: 1 }) });
+    alert('Test push sent! Check your phone.');
+  } catch(err) {
+    alert('Error: ' + err.message);
+  }
+}
+
+async function postAnnouncement() {
+  const title = document.getElementById('announcementTitle').value.trim();
+  const body = document.getElementById('announcementBody').value.trim();
+  const result = document.getElementById('announcementResult');
+  if (!title || !body) { result.textContent = 'Please fill in both title and body.'; return; }
+  try {
+    await adminFetch('/announcements', { method: 'POST', body: JSON.stringify({ title, body }) });
+    document.getElementById('announcementTitle').value = '';
+    document.getElementById('announcementBody').value = '';
+    result.style.color = '#065F46';
+    result.textContent = '✓ Announcement posted! Users will see it in the What\'s new panel.';
+    loadAnnouncements();
+    setTimeout(() => { result.textContent = ''; }, 4000);
+  } catch(err) {
+    result.style.color = '#DC2626';
+    result.textContent = 'Error: ' + err.message;
+  }
+}
+
+async function loadAnnouncements() {
+  try {
+    const { announcements } = await adminFetch('/announcements');
+    const el = document.getElementById('announcementsList');
+    if (!announcements.length) { el.innerHTML = ''; return; }
+    el.innerHTML = `<div style="padding:10px 16px;font-size:12px;font-weight:600;color:#6B7280;text-transform:uppercase;letter-spacing:0.05em">Posted announcements</div>` +
+      announcements.map(a => `
+        <div style="padding:10px 16px;border-top:1px solid #F3F4F6;display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
+          <div>
+            <div style="font-size:13px;font-weight:600;color:#1A1F36">${e(a.title)}</div>
+            <div style="font-size:12px;color:#6B7280;margin-top:2px">${new Date(a.created_at).toLocaleString('en-GB', {day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</div>
+          </div>
+          <button class="btn-small btn-danger" onclick="deleteAnnouncement(${a.id})">Delete</button>
+        </div>`).join('');
+  } catch {}
+}
+
+async function deleteAnnouncement(id) {
+  if (!confirm('Delete this announcement?')) return;
+  try {
+    await adminFetch(`/announcements/${id}`, { method: 'DELETE' });
+    loadAnnouncements();
+  } catch(err) { alert('Error: ' + err.message); }
+}
+
+async function loadErrorLog() {
+  try {
+    const data = await adminFetch('/admin/error-log');
+    const el = document.getElementById('errorLogList');
+    if (!data.length) { el.innerHTML = '<div class="empty">No errors in the last hour. ✅</div>'; return; }
+
+    const loginErrors = data.filter(e => e.path?.includes('/auth'));
+    const otherErrors = data.filter(e => !e.path?.includes('/auth'));
+
+    let summary = '';
+    if (loginErrors.length > 0) {
+      const uniqueIps = new Set(loginErrors.map(e => e.ip)).size;
+      summary = `<div style="padding:10px 16px;background:#FEF3C7;border-bottom:1px solid #FDE68A;font-size:13px;color:#92400E">
+        ⚠️ <strong>${loginErrors.length} login rate limit hit${loginErrors.length > 1 ? 's' : ''}</strong> from ${uniqueIps} unique IP${uniqueIps > 1 ? 's' : ''} — ${uniqueIps > 3 ? '🚨 Widespread issue — check rate limiter config' : 'Normal level'}
+      </div>`;
+    }
+
+    el.innerHTML = summary + `<table>
+      <thead><tr><th>Type</th><th>Path</th><th>IP</th><th>When</th></tr></thead>
+      <tbody>${data.slice(0, 20).map(err => `<tr>
+        <td><span class="badge ${err.type === 'rate_limit' ? 'badge-amber' : 'badge-red'}">${e(err.type)}</span></td>
+        <td style="font-size:12px;color:#6B7280">${e(err.path || '—')}</td>
+        <td style="font-size:12px;color:#6B7280">${e(err.ip || '—')}</td>
+        <td style="font-size:12px;color:#6B7280">${new Date(err.created_at).toLocaleTimeString()}</td>
+      </tr>`).join('')}
+      </tbody></table>`;
+  } catch(err) {
+    document.getElementById('errorLogList').innerHTML = `<div class="empty">Error: ${err.message}</div>`;
+  }
+}
+
+async function autoNudge() {
+  const btn = document.getElementById('nudgeBtn');
+  btn.disabled = true; btn.textContent = 'Running…';
+  try {
+    const { sent } = await adminFetch('/admin/auto-nudge', { method: 'POST' });
+    document.getElementById('nudgeResult').textContent = `✓ Done — sent nudge to ${sent} inactive user${sent !== 1 ? 's' : ''}.`;
+  } catch(err) {
+    document.getElementById('nudgeResult').textContent = `Error: ${err.message}`;
+  }
+  btn.disabled = false; btn.textContent = 'Run now';
+}
+
+async function loadFraudFlags() {
+  try {
+    const data = await adminFetch('/admin/fraud-flags');
+    document.getElementById('fraudCount').textContent = `${data.length} flagged`;
+    const el = document.getElementById('fraudFlagsList');
+    if (!data.length) { el.innerHTML = '<div class="empty">No fraud flags. 🎉</div>'; return; }
+    el.innerHTML = `<table>
+      <thead><tr><th>User</th><th>Stuck swaps</th><th>Disputes</th><th>No-show reports</th><th>Times reported</th><th></th></tr></thead>
+      <tbody>${data.map(u => `<tr>
+        <td><strong>${e(u.name)}</strong><div style="font-size:11px;color:#6B7280">${e(u.email)}</div></td>
+        <td style="color:${u.stuck_accepted_swaps > 0 ? '#EF4444' : '#6B7280'}">${u.stuck_accepted_swaps}</td>
+        <td style="color:${u.disputed_swaps > 0 ? '#EF4444' : '#6B7280'}">${u.disputed_swaps}</td>
+        <td style="color:${u.no_show_reports > 0 ? '#EF4444' : '#6B7280'}">${u.no_show_reports}</td>
+        <td>${u.times_reported || 0}</td>
+        <td><button class="btn-small btn-danger" onclick="toggleSuspend(${u.id}, true)">Suspend</button></td>
+      </tr>`).join('')}
+      </tbody></table>`;
+  } catch(err) { document.getElementById('fraudFlagsList').innerHTML = `<div class="empty">Error: ${err.message}</div>`; }
+}
+
+async function loadNoShowReports() {
+  try {
+    const data = await adminFetch('/reports');
+    document.getElementById('noShowCount').textContent = `${data.length} reports`;
+    const el = document.getElementById('noShowList');
+    if (!data.length) { el.innerHTML = '<div class="empty">No no-show reports yet.</div>'; return; }
+    el.innerHTML = `<table>
+      <thead><tr><th>Reported user</th><th>Reported by</th><th>Swap</th><th>Notes</th><th>When</th></tr></thead>
+      <tbody>${data.map(r => `<tr>
+        <td><strong>${e(r.reported_name)}</strong><div style="font-size:11px;color:#6B7280">${e(r.reported_email)} · ${r.total_reports_against} total reports</div></td>
+        <td style="font-size:12px">${e(r.reporter_name)}</td>
+        <td style="font-size:12px">#${r.swap_id}</td>
+        <td style="font-size:12px;color:#6B7280">${r.notes ? e(r.notes) : '—'}</td>
+        <td style="font-size:12px;color:#6B7280">${new Date(r.created_at).toLocaleDateString()}</td>
+      </tr>`).join('')}
+      </tbody></table>`;
+  } catch(err) { document.getElementById('noShowList').innerHTML = `<div class="empty">Error: ${err.message}</div>`; }
+}
+
+async function loadOverview() {
+  loadHealth();
+  loadErrorLog();
+  loadAnnouncements();
+  try {
+    const d = await adminFetch('/admin/overview');
+    document.getElementById('stat-total-users').textContent = d.users.total_users;
+    document.getElementById('stat-active-7d').textContent = d.users.active_7d;
+    document.getElementById('stat-total-swaps').textContent = d.swaps.total_swaps;
+    document.getElementById('stat-completed').textContent = d.swaps.completed;
+    document.getElementById('stat-new-7d').textContent = d.users.new_users_7d;
+    document.getElementById('stat-active-24h').textContent = d.users.active_24h;
+    document.getElementById('stat-active-swaps').textContent = d.swaps.active;
+    document.getElementById('stat-matches').textContent = d.matches.pending_matches;
+  } catch(e) { console.error('overview', e); }
+}
+
+async function loadUsers() {
+  try {
+    const users = await adminFetch('/admin/analytics');
+    allUsers = users;
+    renderUsers(users);
+  } catch(e) { document.getElementById('usersTable').innerHTML = `<div class="empty">Error: ${e.message}</div>`; }
+}
+
+let userSortCol = 'last_login_at';
+let userSortDir = 'desc';
+
+function sortUsers(col) {
+  if (userSortCol === col) {
+    userSortDir = userSortDir === 'asc' ? 'desc' : 'asc';
+  } else {
+    userSortCol = col;
+    userSortDir = 'desc';
+  }
+  const q = document.getElementById('userSearch').value.toLowerCase();
+  renderUsers(allUsers.filter(u => !q || u.name?.toLowerCase().includes(q) || u.email?.toLowerCase().includes(q)));
+}
+
+function sortArrow(col) {
+  if (userSortCol !== col) return '<span style="color:#D1D5DB;font-size:10px;margin-left:4px">⇅</span>';
+  return userSortDir === 'asc'
+    ? '<span style="color:#1AAB8A;font-size:11px;margin-left:4px">▲</span>'
+    : '<span style="color:#1AAB8A;font-size:11px;margin-left:4px">▼</span>';
+}
+
+function filterUsers() {
+  const q = document.getElementById('userSearch').value.toLowerCase();
+  renderUsers(allUsers.filter(u => u.name?.toLowerCase().includes(q) || u.email?.toLowerCase().includes(q)));
+}
+
+function renderUsers(users) {
+  const el = document.getElementById('usersTable');
+  if (!users.length) { el.innerHTML = '<div class="empty">No users found.</div>'; return;  }
+
+  const DATE_COLS = ['created_at', 'last_login_at', 'last_swap_activity'];
+
+  // Sort
+  const sorted = [...users].sort((a, b) => {
+    let av = a[userSortCol], bv = b[userSortCol];
+    if (av == null && bv == null) return 0;
+    if (av == null) return 1;
+    if (bv == null) return -1;
+    // Convert date columns to timestamps for reliable comparison
+    if (DATE_COLS.includes(userSortCol)) {
+      av = new Date(av).getTime();
+      bv = new Date(bv).getTime();
+    } else {
+      const an = parseFloat(av), bn = parseFloat(bv);
+      if (!isNaN(an) && !isNaN(bn)) { av = an; bv = bn; }
+    }
+    return userSortDir === 'asc' ? (av > bv ? 1 : av < bv ? -1 : 0) : (av < bv ? 1 : av > bv ? -1 : 0);
+  });
+
+  const thStyle = 'cursor:pointer;user-select:none;white-space:nowrap';
+  const thActive = col => userSortCol === col ? `${thStyle};color:#1AAB8A;background:#F0FDF9` : thStyle;
+
+  const rows = sorted.map(u => {
+    try {
+      const stars = u.avg_rating ? '★'.repeat(Math.round(u.avg_rating)) + '☆'.repeat(5 - Math.round(u.avg_rating)) : '';
+      const reviews = u.recent_reviews || [];
+      const initials = (u.name || '?').split(' ').map(p => p[0]).join('').slice(0, 2).toUpperCase();
+
+      const photoHtml = u.profile_photo
+        ? `<img src="${u.profile_photo}" alt="${e(u.name)}" style="width:40px;height:40px;border-radius:50%;object-fit:cover;border:2px solid var(--border)">`
+        : `<div style="width:40px;height:40px;border-radius:50%;background:#1AAB8A;color:white;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex-shrink:0">${e(initials)}</div>`;
+
+      const reviewsHtml = reviews.length ? reviews.map(r => `
+        <div style="margin-top:6px;padding:6px 8px;background:#F9FAFB;border-radius:6px;font-size:11px">
+          <span style="color:#F59E0B">${'★'.repeat(r.stars)}${'☆'.repeat(5-r.stars)}</span>
+          <span style="color:#6B7280;margin-left:4px">from ${e(r.reviewer_name)}</span>
+          ${r.comment ? `<div style="color:#374151;margin-top:2px">"${e(r.comment)}"</div>` : ''}
+        </div>`).join('') : '<div style="font-size:11px;color:#9CA3AF;margin-top:4px">No reviews yet</div>';
+
+      return `<tr>
+        <td style="min-width:200px">
+          <div style="display:flex;align-items:center;gap:10px">
+            ${photoHtml}
+            <div>
+              <div style="font-weight:600;font-size:13px">${e(u.name || '(no name)')}</div>
+              <div style="font-size:11px;color:#6B7280">${e(u.email || '')}</div>
+            </div>
+          </div>
+        </td>
+        <td style="min-width:160px;white-space:nowrap">
+          <div style="font-size:13px;color:#1A1F36">${u.created_at ? new Date(u.created_at).toLocaleDateString('en-GB', {day:'2-digit',month:'short',year:'numeric'}) : '—'}</div>
+          <div style="font-size:11px;color:#9CA3AF">${u.created_at ? new Date(u.created_at).toLocaleTimeString('en-GB', {hour:'2-digit',minute:'2-digit'}) : ''}</div>
+        </td>
+        <td style="min-width:140px">
+          ${u.avg_rating
+            ? `<div style="color:#F59E0B;font-size:14px">${stars}</div>
+               <div style="font-size:11px;color:#6B7280">${u.avg_rating} / 5 &nbsp;(${u.rating_count} review${u.rating_count != 1 ? 's' : ''})</div>`
+            : '<span style="font-size:12px;color:#9CA3AF">No ratings</span>'
+          }
+          <details style="margin-top:4px">
+            <summary style="font-size:11px;color:#1AAB8A;cursor:pointer;list-style:none">
+              ${reviews.length ? `View ${reviews.length} review${reviews.length > 1 ? 's' : ''}` : 'No reviews'}
+            </summary>
+            ${reviewsHtml}
+          </details>
+        </td>
+        <td style="white-space:nowrap">${u.duplicates_count || 0} spares<br><span style="font-size:11px;color:#6B7280">${u.needs_count || 0} needs</span></td>
+        <td style="white-space:nowrap">
+          <span style="font-size:16px;font-weight:700;color:#1AAB8A">${u.swaps_count || 0}</span>
+          <div style="font-size:11px;color:#6B7280">${u.completed_swaps || 0} completed</div>
+        </td>
+        <td>${u.total_sessions || 0}</td>
+        <td style="white-space:nowrap">${u.avg_session_minutes ? u.avg_session_minutes + ' min' : '—'}</td>
+        <td>${u.login_count || 0}</td>
+        <td style="white-space:nowrap;font-size:12px">${u.last_login_at ? new Date(u.last_login_at).toLocaleString('en-GB', {day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : 'Never'}</td>
+        <td style="white-space:nowrap">
+          <span class="badge ${u.is_suspended ? 'badge-red' : u.email_verified ? 'badge-green' : 'badge-amber'}">
+            ${u.is_suspended ? 'Suspended' : u.email_verified ? 'Active' : 'Unverified'}
+          </span>
+          ${u.times_reported > 0 ? `<br><span class="badge badge-red" style="margin-top:2px">${u.times_reported}× reported</span>` : ''}
+        </td>
+        <td style="white-space:nowrap">
+          <button class="btn-small ${u.is_suspended ? 'btn-secondary' : 'btn-danger'}"
+            onclick="toggleSuspend(${u.id}, ${!u.is_suspended})">
+            ${u.is_suspended ? 'Unsuspend' : 'Suspend'}
+          </button>
+        </td>
+      </tr>`;
+    } catch(err) {
+      return `<tr><td colspan="11" style="color:#EF4444;font-size:12px">Error rendering user ${u.id}: ${e(String(err.message))}</td></tr>`;
+    }
+  }).join('');
+
+  el.innerHTML = `<div style="overflow-x:auto"><table style="min-width:1100px">
+    <thead><tr>
+      <th>User</th>
+      <th onclick="sortUsers('created_at')" style="${thActive('created_at')}">Signed up ${sortArrow('created_at')}</th>
+      <th>Rating & Reviews</th>
+      <th>Stickers</th>
+      <th onclick="sortUsers('swaps_count')" style="${thActive('swaps_count')}">Swaps ${sortArrow('swaps_count')}</th>
+      <th onclick="sortUsers('total_sessions')" style="${thActive('total_sessions')}">Sessions ${sortArrow('total_sessions')}</th>
+      <th onclick="sortUsers('avg_session_minutes')" style="${thActive('avg_session_minutes')}">Avg session ${sortArrow('avg_session_minutes')}</th>
+      <th onclick="sortUsers('login_count')" style="${thActive('login_count')}">Logins ${sortArrow('login_count')}</th>
+      <th onclick="sortUsers('last_login_at')" style="${thActive('last_login_at')}">Last login ${sortArrow('last_login_at')}</th>
+      <th>Status</th>
+      <th></th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table></div>`;
+}
+
+async function loadReportedUsers() {
+  try {
+    const users = await adminFetch('/admin/reported-users');
+    const el = document.getElementById('reportedUsersTable');
+    if (!users.length) { el.innerHTML = '<div class="empty">No reported users.</div>'; return; }
+    el.innerHTML = `<table>
+      <thead><tr><th>Name</th><th>Email</th><th>Times reported</th><th>Status</th><th></th></tr></thead>
+      <tbody>${users.map(u => `<tr>
+        <td>${e(u.name)}</td><td>${e(u.email)}</td><td>${u.times_reported}</td>
+        <td><span class="badge ${u.is_suspended?'badge-red':'badge-green'}">${u.is_suspended?'Suspended':'Active'}</span></td>
+        <td><button class="btn-small ${u.is_suspended?'btn-secondary':'btn-danger'}" onclick="toggleSuspend(${u.id},${!u.is_suspended})">${u.is_suspended?'Unsuspend':'Suspend'}</button></td>
+      </tr>`).join('')}</tbody></table>`;
+  } catch(e) { console.error('reported', e); }
+}
+
+async function loadDisputes() {
+  const status = document.getElementById('disputeFilter')?.value || '';
+  try {
+    const d = await adminFetch(`/admin/disputes${status?'?status='+status:''}`);
+    const el = document.getElementById('disputesTable');
+    if (!d.length) { el.innerHTML = '<div class="empty">No disputes.</div>'; return; }
+    el.innerHTML = `<table>
+      <thead><tr><th>Swap</th><th>Raised by</th><th>Against</th><th>Reason</th><th>Status</th><th></th></tr></thead>
+      <tbody>${d.map(x => `<tr>
+        <td>#${x.swap_id}</td>
+        <td>${e(x.raised_by_name)}<div class="analytics-user">${e(x.raised_by_email)}</div></td>
+        <td>${e(x.against_name)} (${x.against_times_reported}×)<div class="analytics-user">${e(x.against_email)}</div></td>
+        <td>${e(x.reason.replace(/_/g,' '))}<br><span style="color:#6B7280;font-size:12px">${e(x.details||'')}</span></td>
+        <td><span class="badge badge-${x.status==='open'?'amber':x.status==='resolved'?'green':'grey'}">${x.status}</span></td>
+        <td style="display:flex;gap:4px;flex-wrap:wrap">
+          ${x.status!=='resolved'?`<button class="btn-small btn-secondary" onclick="updateDispute(${x.id},'resolved')">Resolve</button>`:''}
+          ${x.status!=='dismissed'?`<button class="btn-small btn-secondary" onclick="updateDispute(${x.id},'dismissed')">Dismiss</button>`:''}
+        </td>
+      </tr>`).join('')}</tbody></table>`;
+  } catch(err) { console.error('disputes', err); }
+}
+
+async function loadInvites() {
+  try {
+    const codes = await adminFetch('/admin/invites-list');
+    const used = codes.filter(c => c.used_at);
+    const unused = codes.filter(c => !c.used_at);
+    document.getElementById('inviteSummary').textContent = `${unused.length} pending · ${used.length} signed up`;
+    const el = document.getElementById('inviteGrid');
+    if (!codes.length) { el.innerHTML = '<div class="empty">No codes yet. Generate one above.</div>'; return; }
+
+    const renderCode = (c) => `
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 18px;border-bottom:1px solid rgba(0,0,0,0.05)">
+        <div>
+          <div style="font-weight:600;font-size:14px;color:#1A1F36">${e(c.created_by && c.created_by !== 'admin' ? c.created_by : '—')}</div>
+          <div style="font-family:monospace;font-size:13px;color:#6B7280;letter-spacing:0.1em;margin-top:2px">${e(c.code)}</div>
+        </div>
+        <div style="text-align:right;display:flex;align-items:center;gap:10px">
+          ${c.used_at
+            ? `<div><span class="badge badge-green">Signed up</span><div style="font-size:11px;color:#9CA3AF;margin-top:3px">${e(c.used_by_name||'')} · ${new Date(c.used_at).toLocaleDateString()}</div></div>`
+            : `<span class="badge badge-amber">Awaiting signup</span>`
+          }
+          ${!c.used_at ? `<button class="btn-small btn-secondary" onclick="copyCode('${e(c.code)}')" title="Copy code">Copy</button>` : ''}
+          ${!c.used_at ? `<button class="btn-small btn-danger" onclick="revokeCode(${c.id})" title="Revoke">Revoke</button>` : ''}
+        </div>
+      </div>`;
+
+    el.innerHTML =
+      (unused.length ? `<div style="padding:8px 18px;font-size:11px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:0.06em;background:#FAFAFA;border-bottom:1px solid rgba(0,0,0,0.05)">Awaiting signup (${unused.length})</div>${unused.map(renderCode).join('')}` : '') +
+      (used.length ? `<div style="padding:8px 18px;font-size:11px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:0.06em;background:#FAFAFA;border-bottom:1px solid rgba(0,0,0,0.05)">Signed up (${used.length})</div>${used.map(renderCode).join('')}` : '');
+  } catch(err) { document.getElementById('inviteGrid').innerHTML = `<div class="empty">Error: ${err.message}</div>`; }
+}
+
+async function copyCode(code) {
+  try { await navigator.clipboard.writeText(code); } catch {}
+  // Brief visual feedback
+  event.target.textContent = 'Copied!';
+  setTimeout(() => { event.target.textContent = 'Copy'; }, 1500);
+}
+
+async function generateSingleCode() {
+  const nameInput = document.getElementById('inviteName');
+  const name = nameInput.value.trim();
+  if (!name) { alert('Please enter the person\'s name first.'); return; }
+
+  try {
+    const { codes } = await adminFetch('/invites/generate', {
+      method: 'POST',
+      body: JSON.stringify({ count: 1, createdBy: name }),
+    });
+    const code = codes[0];
+    if (!code) { alert('Failed to generate code — try again.'); return; }
+
+    // Copy to clipboard automatically
+    try { await navigator.clipboard.writeText(code); } catch {}
+
+    // Show confirmation
+    document.getElementById('generatedCodeValue').textContent = code;
+    document.getElementById('generatedCodeName').textContent = name;
+    document.getElementById('generatedCode').style.display = 'block';
+
+    // Clear input for next person
+    nameInput.value = '';
+    loadInvites();
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+async function generateCodes() {
+  const count = parseInt(document.getElementById('inviteCount')?.value) || 10;
+  try {
+    const { codes } = await adminFetch('/invites/generate', { method:'POST', body: JSON.stringify({ count }) });
+    alert(`Generated ${codes.length} codes:\n\n${codes.join('\n')}`);
+    loadInvites();
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+async function revokeCode(id) {
+  if (!confirm('Revoke this unused code?')) return;
+  try {
+    await adminFetch(`/invites/${id}`, { method: 'DELETE' });
+    loadInvites();
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+let currentFeedbackTab = 'pending';
+
+function switchFeedbackTab(status) {
+  currentFeedbackTab = status;
+  ['pending','fixed','declined'].forEach(s => {
+    const el = document.getElementById(`ftab-${s}`);
+    if (el) el.classList.toggle('active', s === status);
+  });
+  loadFeedback();
+}
+
+async function loadFutureCollections() {
+  const el = document.getElementById('futureCollectionsList');
+  try {
+    const data = await adminFetch('/admin/future-collections');
+    if (!data.results?.length) {
+      el.innerHTML = '<div style="color:#9CA3AF;font-size:13px">No votes yet.</div>';
+      return;
+    }
+    const max = data.results[0].votes;
+    el.innerHTML = data.results.map(r => `
+      <div style="margin-bottom:14px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+          <span style="font-size:13px;font-weight:600;color:#111">${r.emoji || '📦'} ${r.label}</span>
+          <span style="font-size:12px;font-weight:700;color:#1AAB8A">${r.votes} interested</span>
+        </div>
+        <div style="height:6px;background:#f0f0f0;border-radius:3px;overflow:hidden">
+          <div style="height:100%;width:${Math.round((r.votes/max)*100)}%;background:${r.pct > 30 ? '#1AAB8A' : '#0B1120'};border-radius:3px;transition:width 0.4s"></div>
+        </div>
+      </div>
+    `).join('') + `
+      <div style="font-size:11px;color:#bbb;margin-top:8px">${data.totalUsers} total users</div>
+      <div style="display:flex;gap:16px;margin-top:12px;padding-top:12px;border-top:1px solid #f0f0f0">
+        <div style="flex:1">
+          <div style="font-size:20px;font-weight:700;color:#0B1120">${data.pwaInstalls || 0}</div>
+          <div style="font-size:11px;color:#9CA3AF;margin-bottom:8px">📱 PWA installs</div>
+          ${(data.installUsers||[]).map(u => `<div style="font-size:11px;color:#555;padding:3px 0;border-bottom:1px solid #f5f5f5">${e(u.name)} <span style="color:#bbb">${e(u.email)}</span></div>`).join('') || '<div style="font-size:11px;color:#bbb">None yet</div>'}
+        </div>
+        <div style="flex:1">
+          <div style="font-size:20px;font-weight:700;color:#1AAB8A">${data.pushSubscribers || 0}</div>
+          <div style="font-size:11px;color:#9CA3AF;margin-bottom:8px">🔔 Push subscribers</div>
+          ${(data.pushUsers||[]).map(u => `<div style="font-size:11px;color:#555;padding:3px 0;border-bottom:1px solid #f5f5f5">${e(u.name)} <span style="color:#bbb">${e(u.email)}</span></div>`).join('') || '<div style="font-size:11px;color:#bbb">None yet</div>'}
+        </div>
+      </div>
+    `;
+  } catch(err) {
+    el.innerHTML = '<div style="color:#EF4444;font-size:13px">Failed to load: ' + err.message + '</div>';
+  }
+}
+
+async function loadFeedback() {
+  try {
+    const url = currentFeedbackTab === 'pending'
+      ? '/feedback?status=pending'
+      : `/feedback?status=${currentFeedbackTab}`;
+    const items = await adminFetch(url);
+    const el = document.getElementById('feedbackList');
+    if (!items.length) {
+      el.innerHTML = `<div class="empty">No ${currentFeedbackTab} feedback.</div>`;
+      return;
+    }
+    el.innerHTML = items.map(f => `
+      <div class="feedback-item" id="feedback-${f.id}">
+        <div style="font-size:14px;color:#1A1F36;line-height:1.5">${e(f.message)}</div>
+        <div class="feedback-meta" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-top:6px">
+          <span>
+            ${f.user_name ? `<strong>${e(f.user_name)}</strong> · ${e(f.user_email)}` : '<em>Anonymous</em>'}
+            ${f.page ? ` · ${e(f.page)}` : ''}
+            · ${new Date(f.created_at).toLocaleString()}
+          </span>
+          ${currentFeedbackTab === 'pending' ? `
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            ${f.user_id ? `
+              <button class="btn-small btn-primary" onclick="resolveFeedback(${f.id},'fixed',true)">✅ Fixed + notify</button>
+              <button class="btn-small btn-secondary" onclick="resolveFeedback(${f.id},'fixed',false)">✅ Move only</button>
+              <button class="btn-small btn-secondary" onclick="resolveFeedback(${f.id},'declined',true)">❌ Decline + notify</button>
+              <button class="btn-small btn-secondary" onclick="resolveFeedback(${f.id},'declined',false)">❌ Move only</button>
+              <button class="btn-small btn-secondary" onclick="toggleReply(${f.id})">Custom reply</button>
+            ` : `
+              <button class="btn-small btn-primary" onclick="resolveFeedback(${f.id},'fixed',false)">✅ Fixed</button>
+              <button class="btn-small btn-secondary" onclick="resolveFeedback(${f.id},'declined',false)">❌ Decline</button>
+              <span style="font-size:11px;color:#9CA3AF">Anonymous — no notification sent</span>
+            `}
+          </div>` : `
+          <span class="badge ${f.status === 'fixed' ? 'badge-green' : 'badge-grey'}">${f.status}</span>`}
+        </div>
+        ${f.user_id && currentFeedbackTab === 'pending' ? `
+        <div id="reply-${f.id}" style="display:none;margin-top:10px">
+          <textarea id="reply-text-${f.id}" placeholder="Type a custom reply — sent to ${e(f.user_name || 'them')} via their notification bell…" rows="3"
+            style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid rgba(0,0,0,0.12);font-size:13px;font-family:inherit;resize:vertical;margin-bottom:6px"></textarea>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button class="btn-small btn-primary" onclick="sendReply(${f.id})">Send</button>
+            <button class="btn-small btn-secondary" onclick="toggleReply(${f.id})">Cancel</button>
+            <span id="reply-result-${f.id}" style="font-size:12px;color:#1AAB8A"></span>
+          </div>
+        </div>` : ''}
+      </div>`).join('');
+  } catch(err) {
+    document.getElementById('feedbackList').innerHTML = `<div class="empty">Error: ${err.message}</div>`;
+  }
+}
+
+async function resolveFeedback(id, status, notify = true) {
+  const label = status === 'fixed' ? 'mark as fixed' : 'decline';
+  const notifyMsg = notify ? ' — the user will receive an automatic notification.' : ' — no notification will be sent.';
+  if (!confirm(`${label.charAt(0).toUpperCase() + label.slice(1)} this feedback${notifyMsg}`)) return;
+  try {
+    const { userName } = await adminFetch(`/admin/feedback/${id}/resolve`, {
+      method: 'POST',
+      body: JSON.stringify({ status, notify }),
+    });
+    const el = document.getElementById(`feedback-${id}`);
+    if (el) {
+      el.style.transition = 'opacity 0.3s';
+      el.style.opacity = '0';
+      setTimeout(() => { el.remove(); }, 300);
+    }
+    if (notify && userName) {
+      alert(`✓ Moved to ${status} and notification sent to ${userName}.`);
+    }
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+function toggleReply(id) {
+  const el = document.getElementById(`reply-${id}`);
+  if (!el) return;
+  el.style.display = el.style.display === 'none' || !el.style.display ? 'block' : 'none';
+  if (el.style.display === 'block') document.getElementById(`reply-text-${id}`)?.focus();
+}
+
+async function sendReply(id) {
+  const message = document.getElementById(`reply-text-${id}`)?.value?.trim();
+  const resultEl = document.getElementById(`reply-result-${id}`);
+  if (!message) { alert('Please type a reply first.'); return; }
+  try {
+    const { sentTo } = await adminFetch(`/admin/feedback/${id}/reply`, {
+      method: 'POST',
+      body: JSON.stringify({ message }),
+    });
+    resultEl.textContent = `✓ Sent to ${sentTo}`;
+    document.getElementById(`reply-text-${id}`).value = '';
+    setTimeout(() => { resultEl.textContent = ''; toggleReply(id); }, 2500);
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+async function toggleSuspend(userId, suspend) {
+  if (!confirm(`${suspend?'Suspend':'Unsuspend'} this user?`)) return;
+  try {
+    await adminFetch(`/admin/users/${userId}/suspend`, { method:'POST', body: JSON.stringify({ suspended: suspend }) });
+    loadUsers(); loadReportedUsers();
+  } catch(e) { alert(e.message); }
+}
+
+async function updateDispute(id, status) {
+  try {
+    await adminFetch(`/admin/disputes/${id}/status`, { method:'POST', body: JSON.stringify({ status }) });
+    loadDisputes();
+  } catch(e) { alert(e.message); }
+}
+
+function e(s) {
+  if (!s) return '';
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+</script>
+</body>
+</html>
