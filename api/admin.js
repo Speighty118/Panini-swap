@@ -16,6 +16,7 @@ const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 function requireAdmin(req, res, next) {
   const provided = req.headers['x-admin-secret'];
+  console.log(`[ADMIN AUTH] provided="${provided}" expected="${process.env.ADMIN_SECRET}" match=${provided === process.env.ADMIN_SECRET}`);
   if (!process.env.ADMIN_SECRET || provided !== process.env.ADMIN_SECRET) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
