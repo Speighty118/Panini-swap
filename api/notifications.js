@@ -19,6 +19,7 @@ const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 // ----------------------------------------------------------------
 // Shared helper — call this from anywhere to create a notification.
+// Also fires a push notification if the user has subscribed.
 // ----------------------------------------------------------------
 async function createNotification(dbPool, { userId, type, title, body, swapId }) {
   try {
@@ -27,8 +28,14 @@ async function createNotification(dbPool, { userId, type, title, body, swapId })
        VALUES ($1, $2, $3, $4, $5)`,
       [userId, type, title, body || null, swapId || null]
     );
+    // Fire push notification alongside in-app notification
+    // Skip types already handled directly in swaps.js to avoid duplicates
+    const skipTypes = ['swap_proposed', 'swap_accepted', 'swap_posted', 'swap_received', 'direct_message'];
+    if (!skipTypes.includes(type)) {
+      const { sendPushNotification } = require('./push');
+      sendPushNotification(userId, { title, body: body || '' }).catch(() => {});
+    }
   } catch (err) {
-    // Never let notification creation crash the calling request
     console.error('Failed to create notification:', err.message);
   }
 }
