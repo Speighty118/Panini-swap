@@ -259,10 +259,18 @@ app.all('/api/internal/run-matching', async (req, res) => {
   }
 });
 
-// Serve admin dashboard at /admin — protected by the URL being secret
-// The page itself requires ADMIN_SECRET to do anything
+// Serve admin dashboard at /admin
 app.get('/admin', (req, res) => {
-  res.sendFile(require('path').join(__dirname, 'admin.html'));
+  const path = require('path');
+  const fs = require('fs');
+  const filePath = path.join(__dirname, 'admin.html');
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).send('admin.html not found on server. Please commit it to the repo.');
+  }
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.sendFile(filePath);
 });
 
 // ---- Internal: trigger the reminder email job via cron-job.org ----
