@@ -1037,6 +1037,23 @@ router.get('/invites-list', async (req, res) => {
   }
 });
 
+// POST /api/admin/test-push — send a test push to a specific user
+router.post('/test-push', async (req, res) => {
+  const { userId } = req.body;
+  if (!userId) return res.status(400).json({ error: 'userId required' });
+  try {
+    const { sendPushNotification } = require('./push');
+    await sendPushNotification(userId, {
+      title: '🔔 Test notification',
+      body: 'Push notifications are working on Got One Spare?',
+    });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Test push error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/admin/future-collections
 // Returns future collection vote results + PWA install stats for the admin dashboard.
 // ----------------------------------------------------------------
