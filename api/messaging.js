@@ -13,6 +13,7 @@ const express = require('express');
 const router = express.Router();
 const { Pool } = require('pg');
 const { requireAuth } = require('./middleware/auth');
+const { sendPushNotification } = require('./push');
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 // Apply auth to all messaging routes
@@ -117,6 +118,12 @@ router.post('/', async (req, res) => {
       [recipientId, 'New message', `You have a new message from ${req.user.name || 'a user'}`]
     ).catch(() => {});
 
+    // Push notification
+    sendPushNotification(recipientId, {
+      title: '💬 New message',
+      body: `${req.user.name || 'Someone'}: ${body.trim().slice(0, 80)}`,
+    }).catch(() => {});
+
     await client.query('COMMIT');
     res.status(201).json({ conversationId, message: msgRows[0] });
   } catch (err) {
@@ -211,6 +218,12 @@ router.post('/:conversationId/send', async (req, res) => {
          VALUES ($1, 'direct_message', $2, $3)`,
         [otherRows[0].user_id, 'New message', `You have a new message from ${req.user.name || 'a user'}`]
       ).catch(() => {});
+
+      // Push notification
+      sendPushNotification(otherRows[0].user_id, {
+        title: '💬 New message',
+        body: `${req.user.name || 'Someone'}: ${req.body.body?.trim().slice(0, 80) || ''}`,
+      }).catch(() => {});
     }
 
     res.status(201).json(rows[0]);
