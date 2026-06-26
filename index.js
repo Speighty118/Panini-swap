@@ -259,6 +259,12 @@ app.all('/api/internal/run-matching', async (req, res) => {
   }
 });
 
+// Serve admin dashboard at /admin — protected by the URL being secret
+// The page itself requires ADMIN_SECRET to do anything
+app.get('/admin', (req, res) => {
+  res.sendFile(require('path').join(__dirname, 'admin.html'));
+});
+
 // ---- Internal: trigger the reminder email job via cron-job.org ----
 // Set up a new cron job hitting this URL every hour
 app.all('/api/internal/run-reminders', async (req, res) => {
