@@ -433,16 +433,19 @@ async function adminFetch(path, opts = {}) {
 
 async function login() {
   adminSecret = document.getElementById('secretInput').value.replace(/[^\x20-\x7E]/g, '').trim();
-  if (!adminSecret) return;
+  const errorEl = document.getElementById('loginError');
+  errorEl.textContent = '';
+  if (!adminSecret) { errorEl.textContent = 'Please enter the admin secret.'; return; }
+  errorEl.textContent = 'Checking...';
   try {
-    // Verify the secret with a lightweight call before showing the dashboard
     await adminFetch('/admin/overview');
     document.getElementById('login').style.display = 'none';
     document.getElementById('dashboard').style.display = 'block';
-    // Load all panels in the background — failures won't block the dashboard showing
     refreshAll();
   } catch(e) {
-    document.getElementById('loginError').textContent = 'Invalid secret or server unreachable.';
+    errorEl.textContent = 'Error: ' + e.message;
+  }
+}
   }
 }
 
