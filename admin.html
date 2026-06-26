@@ -62,8 +62,10 @@
 <div id="login" class="login">
   <h1>⚙️ Got One Spare? Admin</h1>
   <p style="font-size:13px;color:#6B7280;margin-bottom:16px;">Enter your admin secret to continue.</p>
-  <input type="password" id="secretInput" placeholder="Admin secret" onkeydown="if(event.key==='Enter') login()" />
-  <button class="btn-primary" style="width:100%" onclick="login()">Enter</button>
+  <form onsubmit="event.preventDefault(); login();">
+    <input type="password" id="secretInput" placeholder="Admin secret" style="margin-bottom:8px" />
+    <button type="submit" class="btn-primary" style="width:100%">Enter</button>
+  </form>
   <div id="loginError" class="error"></div>
 </div>
 
