@@ -429,13 +429,19 @@ function showTab(name) {
 async function adminFetch(path, opts = {}) {
   const safeSecret = adminSecret.replace(/[^\x20-\x7E]/g, '').trim();
   const url = `${API_BASE}${path}`;
-  console.log('adminFetch', path, 'secret length:', safeSecret.length, 'url:', url, 'hostname:', window.location.hostname);
-  const res = await fetch(url, {
-    ...opts,
-    headers: { 'Content-Type': 'application/json', 'X-Admin-Secret': safeSecret, ...(opts.headers||{}) },
-  });
-  if (!res.ok) { const b = await res.json().catch(()=>{}); throw new Error(b?.error||`Error ${res.status}`); }
-  return res.json();
+  try {
+    const res = await fetch(url, {
+      ...opts,
+      headers: { 'Content-Type': 'application/json', 'X-Admin-Secret': safeSecret, ...(opts.headers||{}) },
+    });
+    if (!res.ok) { const b = await res.json().catch(()=>{}); throw new Error(b?.error||`Error ${res.status}`); }
+    return res.json();
+  } catch(err) {
+    // Show full error on screen for mobile debugging
+    var el = document.getElementById('loginError');
+    if (el) el.textContent = 'URL:' + url + ' ERR:' + err.message + ' secret:' + safeSecret.length + 'chars';
+    throw err;
+  }
 }
 
 async function login() {
