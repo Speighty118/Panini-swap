@@ -265,12 +265,15 @@ app.get('/admin', (req, res) => {
   const fs = require('fs');
   const filePath = path.join(__dirname, 'admin.html');
   if (!fs.existsSync(filePath)) {
-    return res.status(404).send('admin.html not found on server. Please commit it to the repo.');
+    return res.status(404).send('admin.html not found on server.');
   }
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
   res.setHeader('Pragma', 'no-cache');
-  res.sendFile(filePath);
+  res.setHeader('Expires', '0');
+  // Read fresh every time — no caching
+  const content = fs.readFileSync(filePath, 'utf8');
+  res.send(content);
 });
 
 // ---- Internal: trigger the reminder email job via cron-job.org ----
