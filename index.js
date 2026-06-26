@@ -257,6 +257,23 @@ app.all('/api/internal/run-matching', async (req, res) => {
   }
 });
 
+// ---- Internal: trigger the reminder email job via cron-job.org ----
+// Set up a new cron job hitting this URL every hour
+app.all('/api/internal/run-reminders', async (req, res) => {
+  const providedSecret = req.query.secret;
+  if (!process.env.CRON_SECRET || providedSecret !== process.env.CRON_SECRET) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  try {
+    const { sendReminders } = require('./jobs/send_reminders');
+    await sendReminders();
+    res.json({ success: true, ranAt: new Date().toISOString() });
+  } catch (err) {
+    console.error('Reminder job failed:', err.message);
+    res.status(500).json({ error: 'Reminder job failed' });
+  }
+});
+
 // ---- 404 ----
 app.use((req, res) => {
   res.status(404).json({ error: 'Not found' });
