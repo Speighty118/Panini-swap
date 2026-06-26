@@ -10,6 +10,7 @@ const express = require('express');
 const router = express.Router();
 const { Pool } = require('pg');
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const { sendPushNotification } = require('./push');
 
 function requireAdmin(req, res, next) {
   const provided = req.headers['x-admin-secret'];
@@ -73,6 +74,19 @@ router.post('/', requireAdmin, async (req, res) => {
       `INSERT INTO announcements (title, body) VALUES ($1, $2) RETURNING *`,
       [title, body]
     );
+
+    // Push to all subscribed users — fire and forget, don't block response
+    pool.query(`SELECT id FROM users WHERE push_subscription IS NOT NULL`)
+      .then(({ rows: users }) => {
+        users.forEach(u => {
+          sendPushNotification(u.id, {
+            title: `📢 ${title}`,
+            body: body.slice(0, 100),
+          }).catch(() => {});
+        });
+        console.log(`[ANNOUNCEMENT] Push sent to ${users.length} subscribers`);
+      }).catch(() => {});
+
     res.json(rows[0]);
   } catch (err) {
     console.error(err);
