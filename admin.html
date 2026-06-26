@@ -403,7 +403,7 @@ window.onerror = function(msg, src, line) {
   if (el) el.textContent = 'JS Error line ' + line + ': ' + msg;
   return false;
 };
-const API_BASE = 'https://panini-swap-production-69ef.up.railway.app/api';
+const API_BASE = (window.location.hostname === 'panini-swap-production-69ef.up.railway.app') ? '/api' : 'https://panini-swap-production-69ef.up.railway.app/api';
 let adminSecret = new URLSearchParams(window.location.search).get('s') || '';
 let allUsers = [];
 
@@ -428,8 +428,9 @@ function showTab(name) {
 
 async function adminFetch(path, opts = {}) {
   const safeSecret = adminSecret.replace(/[^\x20-\x7E]/g, '').trim();
-  console.log('adminFetch', path, 'secret length:', safeSecret.length);
-  const res = await fetch(`${API_BASE}${path}`, {
+  const url = `${API_BASE}${path}`;
+  console.log('adminFetch', path, 'secret length:', safeSecret.length, 'url:', url, 'hostname:', window.location.hostname);
+  const res = await fetch(url, {
     ...opts,
     headers: { 'Content-Type': 'application/json', 'X-Admin-Secret': safeSecret, ...(opts.headers||{}) },
   });
@@ -450,8 +451,6 @@ async function login() {
     refreshAll();
   } catch(e) {
     errorEl.textContent = 'Error: ' + e.message;
-  }
-}
   }
 }
 
