@@ -1652,6 +1652,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Auto-login from URL parameter — runs after all functions defined
 if (adminSecret) {
+  document.getElementById('loginError').textContent = 'Auto-logging in... secret length: ' + adminSecret.length;
   adminFetch('/admin/overview').then(function() {
     document.getElementById('login').style.display = 'none';
     document.getElementById('dashboard').style.display = 'block';
@@ -1659,6 +1660,8 @@ if (adminSecret) {
   }).catch(function(err) {
     document.getElementById('loginError').textContent = 'Auto-login failed: ' + err.message;
   });
+} else {
+  document.getElementById('loginError').textContent = 'Debug: no secret in URL. URL: ' + window.location.search;
 }
 </script>
 </body>
