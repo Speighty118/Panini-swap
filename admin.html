@@ -399,19 +399,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>
 const API_BASE = 'https://panini-swap-production-69ef.up.railway.app/api';
-let adminSecret = '';
+let adminSecret = new URLSearchParams(window.location.search).get('s') || '';
 let allUsers = [];
-
-// Auto-login if secret is in URL: /admin?s=YOUR_SECRET
-(function() {
-  const params = new URLSearchParams(window.location.search);
-  const s = params.get('s');
-  if (s) {
-    adminSecret = s;
-    window.history.replaceState({}, '', '/admin');
-    window._autoLogin = true;
-  }
-})();
 
 function showTab(name) {
   document.querySelectorAll('.tabs .tab').forEach((t, i) => {
@@ -1662,7 +1651,7 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // Auto-login from URL parameter — runs after all functions defined
-if (window._autoLogin) {
+if (adminSecret) {
   adminFetch('/admin/overview').then(function() {
     document.getElementById('login').style.display = 'none';
     document.getElementById('dashboard').style.display = 'block';
