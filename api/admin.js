@@ -1030,13 +1030,15 @@ router.get('/invites-list', async (req, res) => {
 });
 
 // GET /api/admin/future-collections
-// Returns future collection vote results for the admin dashboard.
+// Returns future collection vote results + PWA install stats for the admin dashboard.
 // ----------------------------------------------------------------
 router.get('/future-collections', async (req, res) => {
   try {
-    const { rows } = await pool.query(
-      `SELECT collection_key, COUNT(*) AS votes FROM future_collection_votes GROUP BY collection_key ORDER BY votes DESC`
-    );
+    const [votes, installs, pushSubs] = await Promise.all([
+      pool.query(`SELECT collection_key, COUNT(*) AS votes FROM future_collection_votes GROUP BY collection_key ORDER BY votes DESC`),
+      pool.query(`SELECT COUNT(*) FROM users WHERE pwa_installed_at IS NOT NULL`),
+      pool.query(`SELECT COUNT(*) FROM users WHERE push_subscription IS NOT NULL`),
+    ]);
     const totalResult = await pool.query(`SELECT COUNT(*) FROM users`);
     const totalUsers = parseInt(totalResult.rows[0].count);
     const LABELS = {
@@ -1057,13 +1059,15 @@ router.get('/future-collections', async (req, res) => {
       efl: 'EFL Sticker Collection',
     };
     res.json({
-      results: rows.map(r => ({
+      results: votes.rows.map(r => ({
         key: r.collection_key,
         label: LABELS[r.collection_key] || r.collection_key,
         votes: parseInt(r.votes),
         pct: Math.round((parseInt(r.votes) / totalUsers) * 100),
       })),
       totalUsers,
+      pwaInstalls: parseInt(installs.rows[0].count),
+      pushSubscribers: parseInt(pushSubs.rows[0].count),
     });
   } catch (err) {
     console.error(err);
