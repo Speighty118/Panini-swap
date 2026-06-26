@@ -259,7 +259,7 @@ app.all('/api/internal/run-matching', async (req, res) => {
   }
 });
 
-// Serve admin dashboard at /admin
+// Serve admin dashboard at /admin — disable CSP so inline scripts work
 app.get('/admin', (req, res) => {
   const path = require('path');
   const fs = require('fs');
@@ -268,10 +268,8 @@ app.get('/admin', (req, res) => {
     return res.status(404).send('admin.html not found on server.');
   }
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-  res.setHeader('Pragma', 'no-cache');
-  res.setHeader('Expires', '0');
-  // Read fresh every time — no caching
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+  res.setHeader('Content-Security-Policy', "default-src * 'unsafe-inline' 'unsafe-eval' data: blob:;");
   const content = fs.readFileSync(filePath, 'utf8');
   res.send(content);
 });
