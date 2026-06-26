@@ -407,12 +407,12 @@ router.get('/me', requireAuth, async (req, res) => {
 // handle those separately with re-verification if you add them.
 // ----------------------------------------------------------------
 router.put('/me', requireAuth, async (req, res) => {
-  const { name, address_line1, address_line2, city, postcode, country, profile_photo } = req.body;
+  const {
+    name, address_line1, address_line2, city, postcode, country, profile_photo,
+    email_swap_proposed, email_swap_accepted, email_swap_posted,
+    email_swap_received, email_swap_reminders, email_chat_messages,
+  } = req.body;
 
-  // profile_photo arrives as a base64 data URL (e.g. "data:image/jpeg;base64,...").
-  // Cap at ~700KB of base64 text, which corresponds to roughly 500KB of
-  // actual image data — plenty for a small profile photo, small enough
-  // to keep the database and API responses fast.
   const MAX_PHOTO_LENGTH = 700_000;
   if (profile_photo && profile_photo.length > MAX_PHOTO_LENGTH) {
     return res.status(400).json({ error: 'Photo is too large. Please use a smaller image (under ~500KB).' });
@@ -430,10 +430,25 @@ router.put('/me', requireAuth, async (req, res) => {
            city = COALESCE($4, city),
            postcode = COALESCE($5, postcode),
            country = COALESCE($6, country),
-           profile_photo = COALESCE($7, profile_photo)
-       WHERE id = $8
+           profile_photo = COALESCE($7, profile_photo),
+           email_swap_proposed = CASE WHEN $8::boolean IS NOT NULL THEN $8 ELSE email_swap_proposed END,
+           email_swap_accepted = CASE WHEN $9::boolean IS NOT NULL THEN $9 ELSE email_swap_accepted END,
+           email_swap_posted = CASE WHEN $10::boolean IS NOT NULL THEN $10 ELSE email_swap_posted END,
+           email_swap_received = CASE WHEN $11::boolean IS NOT NULL THEN $11 ELSE email_swap_received END,
+           email_swap_reminders = CASE WHEN $12::boolean IS NOT NULL THEN $12 ELSE email_swap_reminders END,
+           email_chat_messages = CASE WHEN $13::boolean IS NOT NULL THEN $13 ELSE email_chat_messages END
+       WHERE id = $14
        RETURNING *`,
-      [name, address_line1, address_line2, city, postcode, country, profile_photo, req.user.id]
+      [
+        name, address_line1, address_line2, city, postcode, country, profile_photo,
+        email_swap_proposed ?? null,
+        email_swap_accepted ?? null,
+        email_swap_posted ?? null,
+        email_swap_received ?? null,
+        email_swap_reminders ?? null,
+        email_chat_messages ?? null,
+        req.user.id,
+      ]
     );
     res.json(publicUser(rows[0]));
   } catch (err) {
