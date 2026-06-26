@@ -19,6 +19,7 @@ const {
   sendSwapPostedEmail,
   sendSwapReceivedEmail,
 } = require('./email');
+const { sendPushNotification } = require('./push');
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
@@ -270,6 +271,12 @@ router.post('/', async (req, res) => {
       }).catch(err => console.error('Email error (swap proposed):', err.message));
     }
 
+    // Push notification
+    sendPushNotification(otherUserId, {
+      title: '🤝 New swap proposal!',
+      body: `${proposerRows[0]?.name || 'Someone'} wants to swap stickers with you`,
+    }).catch(() => {});
+
     res.status(201).json({ swap, items });
   } catch (err) {
     await client.query('ROLLBACK');
@@ -493,6 +500,12 @@ router.post('/:id/accept', async (req, res) => {
           count: swapCount,
         }).catch(err => console.error('Email error (swap accepted):', err.message));
       }
+
+      // Push notification
+      sendPushNotification(otherUserId, {
+        title: '🎉 Swap accepted!',
+        body: `${userRows[0]?.name || 'Your swap partner'} accepted — time to post!`,
+      }).catch(() => {});
     }
 
     await client.query('COMMIT');
@@ -721,6 +734,12 @@ router.post('/:id/posted', async (req, res) => {
       }).catch(err => console.error('Email error (swap posted):', err.message));
     }
 
+    // Push notification
+    sendPushNotification(otherUserId, {
+      title: '📮 Stickers posted!',
+      body: `${senderRows[0]?.name || 'Your swap partner'} has posted their stickers`,
+    }).catch(() => {});
+
     res.json({ success: true });
   } catch (err) {
     console.error(err);
@@ -797,6 +816,12 @@ router.post('/:id/received', async (req, res) => {
         swapId,
       }).catch(err => console.error('Email error (swap received):', err.message));
     }
+
+    // Push notification
+    sendPushNotification(otherUserId, {
+      title: '📦 Stickers received!',
+      body: `${receiverRows[0]?.name || 'Your swap partner'} confirmed they got their stickers`,
+    }).catch(() => {});
 
     // Always return canRate: true so the rating prompt shows immediately
     // when the user marks received — they have the stickers so they can rate
