@@ -64,7 +64,7 @@
   <p style="font-size:13px;color:#6B7280;margin-bottom:16px;">Enter your admin secret to continue.</p>
   <input type="text" id="secretInput" placeholder="Admin secret" style="margin-bottom:8px;-webkit-text-security:disc" />
   <a href="#" id="loginBtn" style="display:block;width:100%;padding:12px 0;background:#1AAB8A;color:white;text-align:center;border-radius:8px;font-weight:700;font-size:15px;text-decoration:none;box-sizing:border-box;margin-bottom:8px;-webkit-tap-highlight-color:rgba(0,0,0,0.1)">Enter</a>
-  <div id="loginError" style="min-height:24px;font-size:13px;color:#DC2626;word-break:break-all"></div>
+  <div id="loginError" style="min-height:24px;font-size:13px;color:#DC2626;word-break:break-all">JS loading...</div>
 </div>
 
 <div id="dashboard">
@@ -404,6 +404,12 @@ window.onerror = function(msg, src, line) {
 const API_BASE = (window.location.hostname === 'panini-swap-production-69ef.up.railway.app') ? '/api' : 'https://panini-swap-production-69ef.up.railway.app/api';
 let adminSecret = new URLSearchParams(window.location.search).get('s') || '';
 let allUsers = [];
+
+// Immediate test — if this runs, JS is working
+(function() {
+  var el = document.getElementById('loginError');
+  if (el) el.textContent = 'JS OK — tap Enter to login. API: ' + API_BASE;
+})();
 
 function showTab(name) {
   document.querySelectorAll('.tabs .tab').forEach((t, i) => {
