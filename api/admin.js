@@ -925,6 +925,20 @@ router.post('/broadcast', async (req, res) => {
         [user.id, type, title.trim(), body?.trim() || null]
       );
     }
+
+    // Push to all subscribed users — fire and forget
+    const { sendPushNotification } = require('./push');
+    const { rows: pushUsers } = await pool.query(
+      `SELECT id FROM users WHERE push_subscription IS NOT NULL`
+    );
+    pushUsers.forEach(u => {
+      sendPushNotification(u.id, {
+        title: `📢 ${title.trim()}`,
+        body: body?.trim()?.slice(0, 100) || '',
+      }).catch(() => {});
+    });
+    console.log(`[BROADCAST] Push sent to ${pushUsers.length} subscribers`);
+
     res.json({ sent: users.length });
   } catch (err) {
     console.error(err);
