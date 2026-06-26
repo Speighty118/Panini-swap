@@ -62,11 +62,9 @@
 <div id="login" class="login">
   <h1>⚙️ Got One Spare? Admin</h1>
   <p style="font-size:13px;color:#6B7280;margin-bottom:16px;">Enter your admin secret to continue.</p>
-  <input type="password" id="secretInput" placeholder="Admin secret" style="margin-bottom:8px" />
-  <div style="margin-bottom:8px">
-    <button type="button" class="btn-primary" style="width:100%;cursor:pointer" onclick="javascript:login()">Enter</button>
-  </div>
-  <div id="loginError" class="error" style="min-height:20px"></div>
+  <input type="text" id="secretInput" placeholder="Admin secret" style="margin-bottom:8px;-webkit-text-security:disc" />
+  <a href="#" id="loginBtn" style="display:block;width:100%;padding:12px 0;background:#1AAB8A;color:white;text-align:center;border-radius:8px;font-weight:700;font-size:15px;text-decoration:none;box-sizing:border-box;margin-bottom:8px;-webkit-tap-highlight-color:rgba(0,0,0,0.1)">Enter</a>
+  <div id="loginError" style="min-height:24px;font-size:13px;color:#DC2626;word-break:break-all"></div>
 </div>
 
 <div id="dashboard">
@@ -1652,11 +1650,11 @@ document.addEventListener('DOMContentLoaded', function() {
   var btn = document.getElementById('loginBtn');
   var input = document.getElementById('secretInput');
   if (btn) {
-    btn.addEventListener('click', login);
+    btn.addEventListener('click', function(e) { e.preventDefault(); login(); });
     btn.addEventListener('touchend', function(e) { e.preventDefault(); login(); });
   }
   if (input) {
-    input.addEventListener('keydown', function(e) { if (e.key === 'Enter') login(); });
+    input.addEventListener('keydown', function(e) { if (e.key === 'Enter') { e.preventDefault(); login(); } });
   }
 });
 
