@@ -63,8 +63,10 @@
   <h1>⚙️ Got One Spare? Admin</h1>
   <p style="font-size:13px;color:#6B7280;margin-bottom:16px;">Enter your admin secret to continue.</p>
   <input type="password" id="secretInput" placeholder="Admin secret" style="margin-bottom:8px" />
-  <button type="button" id="loginBtn" class="btn-primary" style="width:100%">Enter</button>
-  <div id="loginError" class="error"></div>
+  <div style="margin-bottom:8px">
+    <button type="button" class="btn-primary" style="width:100%;cursor:pointer" onclick="javascript:login()">Enter</button>
+  </div>
+  <div id="loginError" class="error" style="min-height:20px"></div>
 </div>
 
 <div id="dashboard">
@@ -399,6 +401,27 @@
 const API_BASE = 'https://panini-swap-production-69ef.up.railway.app/api';
 let adminSecret = '';
 let allUsers = [];
+
+// Auto-login if secret is in URL: /admin?s=YOUR_SECRET
+(function() {
+  const params = new URLSearchParams(window.location.search);
+  const s = params.get('s');
+  if (s) {
+    adminSecret = s;
+    // Remove secret from URL for security
+    window.history.replaceState({}, '', '/admin');
+    // Auto-login
+    window.addEventListener('DOMContentLoaded', function() {
+      adminFetch('/admin/overview').then(function() {
+        document.getElementById('login').style.display = 'none';
+        document.getElementById('dashboard').style.display = 'block';
+        refreshAll();
+      }).catch(function(e) {
+        document.getElementById('loginError').textContent = 'Invalid secret: ' + e.message;
+      });
+    });
+  }
+})();
 
 function showTab(name) {
   document.querySelectorAll('.tabs .tab').forEach((t, i) => {
