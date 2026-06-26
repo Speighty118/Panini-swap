@@ -83,7 +83,7 @@ router.post('/track-install', requireAuth, async (req, res) => {
 // sendPushNotification — internal helper used by swap endpoints.
 // Exported for use in swaps.js and other routes.
 // ----------------------------------------------------------------
-async function sendPushNotification(userId, { title, body, url = '/' }) {
+async function sendPushNotification(userId, { title, body, url = '/', badgeCount = 1 }) {
   if (!process.env.VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY) return;
   try {
     const { rows } = await pool.query(
@@ -95,7 +95,7 @@ async function sendPushNotification(userId, { title, body, url = '/' }) {
       ? JSON.parse(rows[0].push_subscription)
       : rows[0].push_subscription;
     const webpush = getWebPush();
-    await webpush.sendNotification(subscription, JSON.stringify({ title, body, url }));
+    await webpush.sendNotification(subscription, JSON.stringify({ title, body, url, badgeCount }));
   } catch (err) {
     // Subscription expired or invalid — clear it
     if (err.statusCode === 410 || err.statusCode === 404) {
