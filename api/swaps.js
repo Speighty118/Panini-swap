@@ -13,6 +13,12 @@ const router = express.Router();
 const { Pool } = require('pg');
 const { requireAuth } = require('./middleware/auth');
 const { createNotification } = require('./notifications');
+const {
+  sendSwapProposedEmail,
+  sendSwapAcceptedEmail,
+  sendSwapPostedEmail,
+  sendSwapReceivedEmail,
+} = require('./email');
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
@@ -248,6 +254,22 @@ router.post('/', async (req, res) => {
       swapId: swap.id,
     });
 
+    // Send email notification if recipient has it enabled
+    const { rows: recipientRows } = await pool.query(
+      `SELECT email, name, email_swap_proposed FROM users WHERE id = $1`,
+      [otherUserId]
+    );
+    const recipient = recipientRows[0];
+    if (recipient?.email_swap_proposed) {
+      const swapCount = Math.min(items.filter(i => i.from_user_id === swap.user_a_id).length, items.filter(i => i.from_user_id === swap.user_b_id).length);
+      sendSwapProposedEmail(recipient.email, {
+        recipientName: recipient.name,
+        proposerName: proposerRows[0]?.name || 'Someone',
+        swapId: swap.id,
+        count: swapCount || swap.predicted_count || '?',
+      }).catch(err => console.error('Email error (swap proposed):', err.message));
+    }
+
     res.status(201).json({ swap, items });
   } catch (err) {
     await client.query('ROLLBACK');
@@ -456,6 +478,21 @@ router.post('/:id/accept', async (req, res) => {
         body: `${userRows[0]?.name || 'Your swap partner'} also accepted. Check the swap for their address.`,
         swapId,
       });
+
+      // Send email if recipient has it enabled
+      const { rows: otherRows } = await pool.query(
+        `SELECT email, name, email_swap_accepted FROM users WHERE id = $1`, [otherUserId]
+      );
+      const otherUser = otherRows[0];
+      if (otherUser?.email_swap_accepted) {
+        const swapCount = items.length / 2;
+        sendSwapAcceptedEmail(otherUser.email, {
+          recipientName: otherUser.name,
+          acceptorName: userRows[0]?.name || 'Your swap partner',
+          swapId,
+          count: swapCount,
+        }).catch(err => console.error('Email error (swap accepted):', err.message));
+      }
     }
 
     await client.query('COMMIT');
@@ -671,6 +708,19 @@ router.post('/:id/posted', async (req, res) => {
       swapId,
     });
 
+    // Send email if recipient has it enabled
+    const { rows: otherRows } = await pool.query(
+      `SELECT email, name, email_swap_posted FROM users WHERE id = $1`, [otherUserId]
+    );
+    const otherUser = otherRows[0];
+    if (otherUser?.email_swap_posted) {
+      sendSwapPostedEmail(otherUser.email, {
+        recipientName: otherUser.name,
+        senderName: senderRows[0]?.name || 'Your swap partner',
+        swapId,
+      }).catch(err => console.error('Email error (swap posted):', err.message));
+    }
+
     res.json({ success: true });
   } catch (err) {
     console.error(err);
@@ -731,6 +781,21 @@ router.post('/:id/received', async (req, res) => {
       checkStreakBadges(updated.user_b_id).catch(() => {});
       updateResponseRate(updated.user_a_id).catch(() => {});
       updateResponseRate(updated.user_b_id).catch(() => {});
+    }
+
+    // Notify the other party that stickers were received
+    const { rows: receiverRows } = await pool.query('SELECT name FROM users WHERE id = $1', [userId]);
+    const otherUserId = isUserA ? updated.user_b_id : updated.user_a_id;
+    const { rows: otherRows } = await pool.query(
+      `SELECT email, name, email_swap_received FROM users WHERE id = $1`, [otherUserId]
+    );
+    const otherUser = otherRows[0];
+    if (otherUser?.email_swap_received) {
+      sendSwapReceivedEmail(otherUser.email, {
+        recipientName: otherUser.name,
+        receiverName: receiverRows[0]?.name || 'Your swap partner',
+        swapId,
+      }).catch(err => console.error('Email error (swap received):', err.message));
     }
 
     // Always return canRate: true so the rating prompt shows immediately
