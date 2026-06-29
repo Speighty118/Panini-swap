@@ -53,6 +53,14 @@ async function runMatchingJob() {
            computed_at = NOW(),
            status = CASE
              WHEN matches.status = 'stale' THEN 'pending'
+             -- Reactivate a previously-proposed match only if its swap
+             -- has since been declined or completed (not still active).
+             WHEN matches.status = 'proposed' AND NOT EXISTS (
+               SELECT 1 FROM swaps s
+               WHERE ((s.user_a_id = $1 AND s.user_b_id = $2)
+                   OR (s.user_a_id = $2 AND s.user_b_id = $1))
+               AND s.status IN ('proposed', 'accepted', 'posted')
+             ) THEN 'pending'
              ELSE matches.status
            END`,
         [m.user_a, m.user_b, m.a_gives_b_count, m.b_gives_a_count]
