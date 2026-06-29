@@ -650,6 +650,58 @@ router.post('/:id/withdraw', async (req, res) => {
 });
 
 // ----------------------------------------------------------------
+// POST /api/swaps/:id/sticker-photo
+// Upload a photo of the stickers you're about to send.
+// Shows on both sides of the swap as pre-posting evidence.
+// Body: { photo } — base64 image string.
+// ----------------------------------------------------------------
+router.post('/:id/sticker-photo', async (req, res) => {
+  const userId = req.user.id;
+  const swapId = parseInt(req.params.id);
+  const { photo } = req.body;
+
+  if (!photo) return res.status(400).json({ error: 'Photo is required' });
+  if (photo.length > 700000) return res.status(400).json({ error: 'Photo too large — please use a smaller image' });
+
+  try {
+    const { rows } = await pool.query(`SELECT * FROM swaps WHERE id = $1`, [swapId]);
+    if (!rows[0]) return res.status(404).json({ error: 'Swap not found' });
+    const swap = rows[0];
+
+    if (swap.user_a_id !== userId && swap.user_b_id !== userId) {
+      return res.status(403).json({ error: 'Not your swap' });
+    }
+    if (!['accepted', 'posted'].includes(swap.status)) {
+      return res.status(400).json({ error: 'Swap is not in an active state' });
+    }
+
+    const isUserA = swap.user_a_id === userId;
+    const field = isUserA ? 'user_a_sticker_photo' : 'user_b_sticker_photo';
+
+    await pool.query(
+      `UPDATE swaps SET ${field} = $1, updated_at = NOW() WHERE id = $2`,
+      [photo, swapId]
+    );
+
+    // Notify the other side
+    const otherUserId = isUserA ? swap.user_b_id : swap.user_a_id;
+    const { rows: senderRows } = await pool.query('SELECT name FROM users WHERE id = $1', [userId]);
+    await createNotification(pool, {
+      userId: otherUserId,
+      type: 'sticker_photo',
+      title: 'Sticker photo shared',
+      body: `${senderRows[0]?.name || 'Your swap partner'} has shared a photo of the stickers they're sending you.`,
+      swapId,
+    });
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Sticker photo error:', err.message);
+    res.status(500).json({ error: 'Failed to save photo' });
+  }
+});
+
+// ----------------------------------------------------------------
 // POST /api/swaps/:id/posted
 // Mark this user's side as having posted their stickers.
 // Body: { photo? } — optional base64 image as proof of postage.
