@@ -1648,8 +1648,7 @@ async function loadFeedback() {
           ${f.page ? ` · ${e(f.page)}` : ''}
           · ${new Date(f.created_at).toLocaleString()}
         </div>
-        ${currentFeedbackTab === 'pending' ? `
-        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
+        <div class="feedback-buttons" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
           ${f.user_id ? `
             <button class="btn-small btn-primary" onclick="resolveFeedback(${f.id},'fixed',true)">✅ Fixed + notify</button>
             <button class="btn-small btn-secondary" onclick="resolveFeedback(${f.id},'fixed',false)">✅ Move only</button>
@@ -1659,10 +1658,10 @@ async function loadFeedback() {
           ` : `
             <button class="btn-small btn-primary" onclick="resolveFeedback(${f.id},'fixed',false)">✅ Fixed</button>
             <button class="btn-small btn-secondary" onclick="resolveFeedback(${f.id},'declined',false)">❌ Decline</button>
-            <span style="font-size:11px;color:#9CA3AF">Anonymous — no notification sent</span>
+            <span style="font-size:11px;color:#9CA3AF">Anonymous</span>
           `}
-        </div>` : `
-        <span class="badge ${f.status === 'fixed' ? 'badge-green' : 'badge-grey'}" style="margin-top:6px;display:inline-block">${f.status}</span>`}
+        </div>
+        <span class="badge ${f.status === 'fixed' ? 'badge-green' : 'badge-grey'}" style="margin-top:6px;display:none">${f.status}</span>
         ${f.user_id && currentFeedbackTab === 'pending' ? `
         <div id="reply-${f.id}" style="display:none;margin-top:10px">
           <textarea id="reply-text-${f.id}" placeholder="Type a custom reply — sent to ${e(f.user_name || 'them')} via their notification bell…" rows="3"
