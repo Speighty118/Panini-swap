@@ -33,6 +33,7 @@ const futureCollectionsRoutes = require('./api/future_collections');
 const announcementRoutes = require('./api/announcements');
 const pushRoutes = require('./api/push');
 const messagingRoutes = require('./api/messaging');
+const ambassadorRoutes = require('./api/ambassador');
 const { runMatchingJob } = require('./jobs/run_matching');
 
 const app = express();
@@ -70,7 +71,7 @@ const restrictedCors = cors({
 // Admin-accessible routes (admin.html is a local file with null origin,
 // so these need permissive CORS — all are protected by their own auth).
 const adminCors = cors({ origin: '*' });
-const ADMIN_PATHS = ['/api/admin', '/api/invites', '/api/feedback', '/api/donations', '/api/reports', '/api/announcements'];
+const ADMIN_PATHS = ['/api/admin', '/api/invites', '/api/feedback', '/api/donations', '/api/reports', '/api/announcements', '/api/ambassador/admin'];
 
 ADMIN_PATHS.forEach(path => app.use(path, adminCors));
 
@@ -140,6 +141,7 @@ app.use('/api/announcements', announcementRoutes);
 app.use('/api/future-collections', futureCollectionsRoutes);
 app.use('/api/push', pushRoutes);
 app.use('/api/messages', messagingRoutes);
+app.use('/api/ambassador', ambassadorRoutes);
 app.use('/api/admin', adminRoutes);
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
