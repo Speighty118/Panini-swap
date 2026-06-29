@@ -1649,17 +1649,17 @@ async function loadFeedback() {
             · ${new Date(f.created_at).toLocaleString()}
           </span>
           ${currentFeedbackTab === 'pending' ? `
-          <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
             ${f.user_id ? `
-              <button class="btn-small btn-primary" onclick="resolveFeedback(${f.id},'fixed',true)">✅ Fixed + notify</button>
-              <button class="btn-small btn-secondary" onclick="resolveFeedback(${f.id},'fixed',false)">✅ Move only</button>
-              <button class="btn-small btn-secondary" onclick="resolveFeedback(${f.id},'declined',true)">❌ Decline + notify</button>
-              <button class="btn-small btn-secondary" onclick="resolveFeedback(${f.id},'declined',false)">❌ Move only</button>
-              <button class="btn-small btn-secondary" onclick="toggleReply(${f.id})">Custom reply</button>
+              <button class="btn-small btn-primary" onclick="resolveFeedback(${f.id},'fixed',true)">✅ Fixed</button>
+              <button class="btn-small btn-secondary" onclick="resolveFeedback(${f.id},'fixed',false)">✅ Move</button>
+              <button class="btn-small btn-secondary" onclick="resolveFeedback(${f.id},'declined',true)">❌ Decline</button>
+              <button class="btn-small btn-secondary" onclick="resolveFeedback(${f.id},'declined',false)">❌ Move</button>
+              <button class="btn-small btn-secondary" onclick="toggleReply(${f.id})">Reply</button>
             ` : `
               <button class="btn-small btn-primary" onclick="resolveFeedback(${f.id},'fixed',false)">✅ Fixed</button>
               <button class="btn-small btn-secondary" onclick="resolveFeedback(${f.id},'declined',false)">❌ Decline</button>
-              <span style="font-size:11px;color:#9CA3AF">Anonymous — no notification sent</span>
+              <span style="font-size:11px;color:#9CA3AF">Anonymous</span>
             `}
           </div>` : `
           <span class="badge ${f.status === 'fixed' ? 'badge-green' : 'badge-grey'}">${f.status}</span>`}
