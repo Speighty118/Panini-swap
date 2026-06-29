@@ -455,6 +455,15 @@
   </div><!-- end .content -->
 </div><!-- end #dashboard -->
 
+<div id="panel-ambassador" class="panel" style="padding:0">
+  <div class="content" style="padding-top:0">
+    <div class="section-title" style="padding-top:16px">Ambassador requests</div>
+    <div class="card" id="ambassadorList">
+      <div class="empty">Loading...</div>
+    </div>
+  </div>
+</div>
+
 <!-- BOTTOM NAV -->
 <div class="bottom-nav-wrap" id="bottomNav" style="display:none">
   <div class="bottom-nav">
@@ -486,6 +495,7 @@
   <div class="content" style="padding-top:0">
     <div class="section-title" style="padding-top:16px">More sections</div>
     <div class="card">
+      <button onclick="showTab('ambassador')" style="display:flex;align-items:center;gap:12px;width:100%;padding:14px;background:none;border:none;border-bottom:1px solid #f0f0f0;font-family:inherit;font-size:14px;font-weight:600;color:#0B1120;text-align:left;cursor:pointer">🏅 Ambassador requests</button>
       <button onclick="showTab('analytics')" style="display:flex;align-items:center;gap:12px;width:100%;padding:14px;background:none;border:none;border-bottom:1px solid #f0f0f0;font-family:inherit;font-size:14px;font-weight:600;color:#0B1120;text-align:left;cursor:pointer">📊 Analytics</button>
       <button onclick="showTab('moderation')" style="display:flex;align-items:center;gap:12px;width:100%;padding:14px;background:none;border:none;border-bottom:1px solid #f0f0f0;font-family:inherit;font-size:14px;font-weight:600;color:#0B1120;text-align:left;cursor:pointer">🛡 Moderation</button>
       <button onclick="showTab('invites')" style="display:flex;align-items:center;gap:12px;width:100%;padding:14px;background:none;border:none;border-bottom:1px solid #f0f0f0;font-family:inherit;font-size:14px;font-weight:600;color:#0B1120;text-align:left;cursor:pointer">🎟 Invite Codes</button>
@@ -524,6 +534,7 @@ function showTab(name) {
   if (name === 'donations') loadDonations();
   if (name === 'moderation') { loadReportedUsers(); loadDisputes(); loadFraudFlags(); loadNoShowReports(); }
   if (name === 'messages') loadAdminMessages();
+  if (name === 'ambassador') loadAmbassador();
   if (name === 'analytics') {
     loadAnalytics();
     setTimeout(() => { if (leafletMap) leafletMap.invalidateSize(); }, 100);
@@ -1753,6 +1764,50 @@ document.addEventListener('DOMContentLoaded', function() {
     input.addEventListener('keydown', function(e) { if (e.key === 'Enter') { e.preventDefault(); login(); } });
   }
 });
+
+async function loadAmbassador() {
+  const el = document.getElementById('ambassadorList');
+  try {
+    const rows = await adminFetch('/ambassador/admin/pending');
+    if (!rows.length) { el.innerHTML = '<div class="empty">No pending ambassador requests.</div>'; return; }
+    el.innerHTML = rows.map(r => `
+      <div class="feedback-item" id="amb-${r.id}">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+          <div style="width:36px;height:36px;border-radius:50%;background:#1AAB8A;color:white;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            ${e(r.name?.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase())}
+          </div>
+          <div>
+            <div style="font-size:13px;font-weight:700;color:#0B1120">${e(r.name)}</div>
+            <div style="font-size:11px;color:#9CA3AF">${e(r.email)} · Submitted ${new Date(r.submitted_at).toLocaleDateString('en-GB')}</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+          <button class="btn-small btn-primary" onclick="approveAmbassador(${r.id})">✅ Approve + award badge</button>
+          <button class="btn-small btn-secondary" onclick="rejectAmbassador(${r.id})">❌ Reject</button>
+        </div>
+      </div>
+    `).join('');
+  } catch(err) {
+    el.innerHTML = `<div class="empty">Error: ${err.message}</div>`;
+  }
+}
+
+async function approveAmbassador(id) {
+  try {
+    await adminFetch(`/ambassador/admin/${id}/approve`, { method: 'POST' });
+    document.getElementById(`amb-${id}`).style.opacity = '0.4';
+    document.getElementById(`amb-${id}`).querySelectorAll('button').forEach(b => b.disabled = true);
+    document.getElementById(`amb-${id}`).querySelector('.btn-primary').textContent = '✅ Approved';
+  } catch(err) { alert(err.message); }
+}
+
+async function rejectAmbassador(id) {
+  try {
+    await adminFetch(`/ambassador/admin/${id}/reject`, { method: 'POST' });
+    document.getElementById(`amb-${id}`).style.opacity = '0.4';
+    document.getElementById(`amb-${id}`).querySelectorAll('button').forEach(b => b.disabled = true);
+  } catch(err) { alert(err.message); }
+}
 
 // Auto-login from URL parameter — runs after all functions defined
 if (adminSecret) {
