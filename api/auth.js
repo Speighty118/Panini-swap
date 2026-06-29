@@ -350,7 +350,6 @@ router.post('/reset-password', async (req, res) => {
     }
 
     const resetRecord = rows[0];
-    const bcrypt = require('bcryptjs');
     const passwordHash = await bcrypt.hash(password, 12);
 
     await pool.query(
