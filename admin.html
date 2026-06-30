@@ -457,8 +457,12 @@
 
 <div id="panel-ambassador" class="panel" style="padding:0">
   <div class="content" style="padding-top:0">
-    <div class="section-title" style="padding-top:16px">Ambassador requests</div>
+    <div class="section-title" style="padding-top:16px" id="ambassadorPendingTitle">Pending requests</div>
     <div class="card" id="ambassadorList">
+      <div class="empty">Loading...</div>
+    </div>
+    <div class="section-title" id="ambassadorAwardedTitle">Already awarded</div>
+    <div class="card" id="ambassadorAwardedList">
       <div class="empty">Loading...</div>
     </div>
   </div>
@@ -495,7 +499,7 @@
   <div class="content" style="padding-top:0">
     <div class="section-title" style="padding-top:16px">More sections</div>
     <div class="card">
-      <button onclick="showTab('ambassador')" style="display:flex;align-items:center;gap:12px;width:100%;padding:14px;background:none;border:none;border-bottom:1px solid #f0f0f0;font-family:inherit;font-size:14px;font-weight:600;color:#0B1120;text-align:left;cursor:pointer">🏅 Ambassador requests</button>
+      <button onclick="showTab('ambassador')" style="display:flex;align-items:center;gap:12px;width:100%;padding:14px;background:none;border:none;border-bottom:1px solid #f0f0f0;font-family:inherit;font-size:14px;font-weight:600;color:#0B1120;text-align:left;cursor:pointer">🏅 Ambassador badges</button>
       <button onclick="showTab('analytics')" style="display:flex;align-items:center;gap:12px;width:100%;padding:14px;background:none;border:none;border-bottom:1px solid #f0f0f0;font-family:inherit;font-size:14px;font-weight:600;color:#0B1120;text-align:left;cursor:pointer">📊 Analytics</button>
       <button onclick="showTab('moderation')" style="display:flex;align-items:center;gap:12px;width:100%;padding:14px;background:none;border:none;border-bottom:1px solid #f0f0f0;font-family:inherit;font-size:14px;font-weight:600;color:#0B1120;text-align:left;cursor:pointer">🛡 Moderation</button>
       <button onclick="showTab('invites')" style="display:flex;align-items:center;gap:12px;width:100%;padding:14px;background:none;border:none;border-bottom:1px solid #f0f0f0;font-family:inherit;font-size:14px;font-weight:600;color:#0B1120;text-align:left;cursor:pointer">🎟 Invite Codes</button>
@@ -1766,9 +1770,16 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 async function loadAmbassador() {
+  loadAmbassadorPending();
+  loadAmbassadorAwarded();
+}
+
+async function loadAmbassadorPending() {
   const el = document.getElementById('ambassadorList');
+  const title = document.getElementById('ambassadorPendingTitle');
   try {
     const rows = await adminFetch('/ambassador/admin/pending');
+    title.textContent = `Pending requests (${rows.length})`;
     if (!rows.length) { el.innerHTML = '<div class="empty">No pending ambassador requests.</div>'; return; }
     el.innerHTML = rows.map(r => `
       <div class="feedback-item" id="amb-${r.id}">
@@ -1792,12 +1803,47 @@ async function loadAmbassador() {
   }
 }
 
+async function loadAmbassadorAwarded() {
+  const el = document.getElementById('ambassadorAwardedList');
+  const title = document.getElementById('ambassadorAwardedTitle');
+  try {
+    const rows = await adminFetch('/ambassador/admin/awarded');
+    title.textContent = `Already awarded (${rows.length})`;
+    if (!rows.length) { el.innerHTML = '<div class="empty">No badges awarded yet.</div>'; return; }
+    el.innerHTML = rows.map(r => `
+      <div class="feedback-item" id="amb-awarded-${r.id}">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="width:36px;height:36px;border-radius:50%;background:#0B1120;color:white;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            ${e(r.name?.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase())}
+          </div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:700;color:#0B1120">🏅 ${e(r.name)}</div>
+            <div style="font-size:11px;color:#9CA3AF">${e(r.email)} · Awarded ${r.ambassador_badge_earned_at ? new Date(r.ambassador_badge_earned_at).toLocaleDateString('en-GB') : 'date unknown'}</div>
+          </div>
+          <button class="btn-small btn-danger" onclick="revokeAmbassador(${r.id}, '${e(r.name || '').replace(/'/g, "\\'")}')">Revoke</button>
+        </div>
+      </div>
+    `).join('');
+  } catch(err) {
+    el.innerHTML = `<div class="empty">Error: ${err.message}</div>`;
+  }
+}
+
+async function revokeAmbassador(userId, name) {
+  if (!confirm(`Revoke the Ambassador badge from ${name}? This cannot be undone automatically — they'd need to resubmit.`)) return;
+  try {
+    await adminFetch(`/ambassador/admin/${userId}/revoke`, { method: 'POST' });
+    loadAmbassadorAwarded();
+  } catch(err) { alert(err.message); }
+}
+
 async function approveAmbassador(id) {
   try {
     await adminFetch(`/ambassador/admin/${id}/approve`, { method: 'POST' });
     document.getElementById(`amb-${id}`).style.opacity = '0.4';
     document.getElementById(`amb-${id}`).querySelectorAll('button').forEach(b => b.disabled = true);
     document.getElementById(`amb-${id}`).querySelector('.btn-primary').textContent = '✅ Approved';
+    loadAmbassadorAwarded();
   } catch(err) { alert(err.message); }
 }
 
