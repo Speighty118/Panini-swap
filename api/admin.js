@@ -118,6 +118,27 @@ router.post('/users/:id/suspend', async (req, res) => {
 });
 
 // ----------------------------------------------------------------
+// POST /api/admin/users/:id/verify-email
+// Manually mark a user's email as verified — for cases where the
+// verification email never arrived (spam filters, typo'd address
+// that was later corrected, etc).
+// ----------------------------------------------------------------
+router.post('/users/:id/verify-email', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `UPDATE users SET email_verified = TRUE, verification_token = NULL, verification_token_expires = NULL
+       WHERE id = $1 RETURNING id, name, email, email_verified`,
+      [req.params.id]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'User not found' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to verify email' });
+  }
+});
+
+// ----------------------------------------------------------------
 // GET /api/admin/analytics
 // God's-eye view: every user with their activity stats,
 // profile photo, and rating summary.
