@@ -1450,6 +1450,11 @@ function renderUsers(users) {
             onclick="toggleSuspend(${u.id}, ${!u.is_suspended})">
             ${u.is_suspended ? 'Unsuspend' : 'Suspend'}
           </button>
+          ${!u.email_verified && !u.is_suspended ? `
+          <button class="btn-small btn-primary" style="margin-top:4px;display:block;width:100%"
+            onclick="verifyEmail(${u.id})">
+            Verify email
+          </button>` : ''}
         </td>
       </tr>`;
     } catch(err) {
@@ -1741,6 +1746,14 @@ async function toggleSuspend(userId, suspend) {
   try {
     await adminFetch(`/admin/users/${userId}/suspend`, { method:'POST', body: JSON.stringify({ suspended: suspend }) });
     loadUsers(); loadReportedUsers();
+  } catch(e) { alert(e.message); }
+}
+
+async function verifyEmail(userId) {
+  if (!confirm('Mark this user\'s email as verified? Do this once you\'ve confirmed it\'s a real address that just isn\'t receiving our emails.')) return;
+  try {
+    await adminFetch(`/admin/users/${userId}/verify-email`, { method:'POST' });
+    loadUsers();
   } catch(e) { alert(e.message); }
 }
 
