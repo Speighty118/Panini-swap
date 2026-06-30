@@ -35,6 +35,7 @@ router.get('/', async (req, res) => {
          u.id AS other_user_id,
          u.name AS other_user_name,
          u.profile_photo AS other_user_photo,
+         u.ambassador_badge AS other_user_ambassador_badge,
          -- Latest message
          lm.body AS last_message,
          lm.created_at AS last_message_at,
@@ -53,7 +54,7 @@ router.get('/', async (req, res) => {
          ORDER BY created_at DESC
          LIMIT 1
        ) lm ON TRUE
-       GROUP BY c.id, c.created_at, u.id, u.name, u.profile_photo, lm.body, lm.created_at, lm.sender_id
+       GROUP BY c.id, c.created_at, u.id, u.name, u.profile_photo, u.ambassador_badge, lm.body, lm.created_at, lm.sender_id
        ORDER BY COALESCE(lm.created_at, c.created_at) DESC`,
       [userId]
     );
@@ -169,7 +170,7 @@ router.get('/:conversationId', async (req, res) => {
 
     // Get other participant info
     const { rows: otherRows } = await pool.query(
-      `SELECT u.id, u.name, u.profile_photo FROM conversation_participants cp
+      `SELECT u.id, u.name, u.profile_photo, u.ambassador_badge FROM conversation_participants cp
        JOIN users u ON u.id = cp.user_id
        WHERE cp.conversation_id = $1 AND cp.user_id != $2`,
       [conversationId, userId]
