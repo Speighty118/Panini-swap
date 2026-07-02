@@ -789,6 +789,24 @@ router.post('/auto-nudge', async (req, res) => {
 });
 
 // ----------------------------------------------------------------
+// POST /api/admin/run-receipt-reminders
+// Manual trigger for the "confirm receipt" reminder job — nudges
+// anyone who hasn't confirmed receipt on a swap stuck at 'posted'
+// for 48+ hours. Lets you run it on demand instead of waiting for
+// the cron job, e.g. to test it after deploying.
+// ----------------------------------------------------------------
+router.post('/run-receipt-reminders', async (req, res) => {
+  try {
+    const { sendReceiptReminders } = require('../jobs/send_receipt_reminders');
+    await sendReceiptReminders();
+    res.json({ success: true, ranAt: new Date().toISOString() });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Receipt reminder job failed' });
+  }
+});
+
+// ----------------------------------------------------------------
 // GET /api/admin/fraud-flags
 // Users showing suspicious behaviour: accepted swaps but never posted,
 // multiple no-show reports, high dispute rate.
