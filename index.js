@@ -293,6 +293,25 @@ app.all('/api/internal/run-reminders', async (req, res) => {
   }
 });
 
+// ---- Internal: trigger the "confirm receipt" reminder job ----
+// Set up a new cron job hitting this URL every few hours. Nudges
+// anyone who hasn't confirmed receipt on a swap that's been sitting
+// at 'posted' for 48+ hours.
+app.all('/api/internal/run-receipt-reminders', async (req, res) => {
+  const providedSecret = req.query.secret;
+  if (!process.env.CRON_SECRET || providedSecret !== process.env.CRON_SECRET) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  try {
+    const { sendReceiptReminders } = require('./jobs/send_receipt_reminders');
+    await sendReceiptReminders();
+    res.json({ success: true, ranAt: new Date().toISOString() });
+  } catch (err) {
+    console.error('Receipt reminder job failed:', err.message);
+    res.status(500).json({ error: 'Receipt reminder job failed' });
+  }
+});
+
 // ---- 404 ----
 app.use((req, res) => {
   res.status(404).json({ error: 'Not found' });
