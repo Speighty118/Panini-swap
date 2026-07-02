@@ -864,10 +864,18 @@ router.get('/moderation/cases', async (req, res) => {
       const manualStatus = statusByUser[u.id] && statusByUser[u.id].status;
 
       let section;
-      if (u.is_suspended) section = 'suspended';
-      else if (openDisputes.length > 0 || u.times_reported > 0 || parseInt(stuck.stuck_accepted_swaps, 10) > 0) {
+      if (u.is_suspended) {
+        section = 'suspended';
+      } else if (openDisputes.length > 0 || parseInt(stuck.stuck_accepted_swaps, 10) > 0) {
+        // Something is still genuinely open — can't be manually resolved
+        // away until that's dealt with.
         section = 'needs_attention';
-      } else if (manualStatus === 'needs_attention') {
+      } else if (manualStatus === 'resolved') {
+        // Admin has explicitly cleared this case. times_reported is a
+        // lifetime counter that doesn't go back down on its own, so it
+        // shouldn't be able to override a manual resolve.
+        section = 'resolved';
+      } else if (u.times_reported > 0 || noShows.length > 0 || reportedMsgs.length > 0) {
         section = 'needs_attention';
       } else {
         section = 'resolved';
