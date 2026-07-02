@@ -22,10 +22,12 @@ const pool = new Pool({
 });
 
 const MIN_MATCH = 3;
+const MIN_NOTIFY = 3; // Same "decent size" bar as the homepage activity ticker
 
 async function runMatchingJob() {
   const client = await pool.connect();
   const startedAt = Date.now();
+  const newMatches = []; // brand-new pairs found this run, notified after commit
 
   try {
     await client.query('BEGIN');
@@ -43,7 +45,11 @@ async function runMatchingJob() {
       const key = `${m.user_a}-${m.user_b}`;
       seenPairs.add(key);
 
-      await client.query(
+      // RETURNING (xmax = 0) is the standard Postgres way to tell an
+      // upsert's INSERT branch apart from its UPDATE branch — lets us
+      // notify only on genuinely brand-new pairs, not every refresh of
+      // an existing match's counts (which happens on every run).
+      const { rows: upserted } = await client.query(
         `INSERT INTO matches (user_a_id, user_b_id, a_gives_b_count, b_gives_a_count, status, computed_at)
          VALUES ($1, $2, $3, $4, 'pending', NOW())
          ON CONFLICT (user_a_id, user_b_id)
@@ -62,9 +68,14 @@ async function runMatchingJob() {
                AND s.status IN ('proposed', 'accepted', 'posted')
              ) THEN 'pending'
              ELSE matches.status
-           END`,
+           END
+         RETURNING (xmax = 0) AS is_new_pair`,
         [m.user_a, m.user_b, m.a_gives_b_count, m.b_gives_a_count]
       );
+
+      if (upserted[0]?.is_new_pair && Math.min(m.a_gives_b_count, m.b_gives_a_count) >= MIN_NOTIFY) {
+        newMatches.push(m);
+      }
     }
 
     // Mark stale: pending matches not in this run's results anymore
@@ -90,6 +101,40 @@ async function runMatchingJob() {
     }
 
     await client.query('COMMIT');
+
+    // Notify both sides of any brand-new match, now it's safely
+    // committed. Fire-and-forget — a notification hiccup shouldn't
+    // affect the matching job itself, which runs every minute.
+    if (newMatches.length > 0) {
+      try {
+        const { createNotification } = require('../api/notifications');
+        for (const m of newMatches) {
+          const { rows: names } = await pool.query(
+            `SELECT id, name FROM users WHERE id = ANY($1::int[])`,
+            [[m.user_a, m.user_b]]
+          );
+          const nameA = names.find(n => n.id === m.user_a)?.name || 'Someone';
+          const nameB = names.find(n => n.id === m.user_b)?.name || 'Someone';
+          const count = Math.min(m.a_gives_b_count, m.b_gives_a_count);
+
+          await createNotification(pool, {
+            userId: m.user_a,
+            type: 'match_found',
+            title: '🎉 New match found!',
+            body: `You've been matched with ${nameB} — ${count} sticker${count !== 1 ? 's' : ''} you can swap.`,
+          });
+          await createNotification(pool, {
+            userId: m.user_b,
+            type: 'match_found',
+            title: '🎉 New match found!',
+            body: `You've been matched with ${nameA} — ${count} sticker${count !== 1 ? 's' : ''} you can swap.`,
+          });
+        }
+        console.log(`Notified ${newMatches.length} new match(es).`);
+      } catch (notifyErr) {
+        console.error('Match notification error:', notifyErr);
+      }
+    }
 
     // Auto-clean broken proposed swaps — where stickers are no longer in
     // the giver's duplicates. This runs after every matching cycle so
