@@ -273,8 +273,12 @@
     <div class="card">
       <div class="card-header">
         <h2>😴 Users with no stickers listed</h2>
-        <span id="zeroStickersCount" style="font-size:13px;color:#6B7280"></span>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span id="zeroStickersCount" style="font-size:13px;color:#6B7280"></span>
+          <button class="btn-small btn-primary" onclick="nudgeZeroStickers()" id="zeroNudgeBtn">Nudge all</button>
+        </div>
       </div>
+      <p style="padding:8px 18px 0;font-size:12px;color:#6B7280;margin:0" id="zeroNudgeResult"></p>
       <div id="zeroStickers"></div>
     </div>
 
@@ -1254,6 +1258,19 @@ async function autoNudge() {
     document.getElementById('nudgeResult').textContent = `Error: ${err.message}`;
   }
   btn.disabled = false; btn.textContent = 'Run now';
+}
+
+async function nudgeZeroStickers() {
+  const btn = document.getElementById('zeroNudgeBtn');
+  const resultEl = document.getElementById('zeroNudgeResult');
+  btn.disabled = true; btn.textContent = 'Sending…';
+  try {
+    const { sent } = await adminFetch('/admin/nudge-zero-stickers', { method: 'POST' });
+    resultEl.textContent = `✓ Done — nudged ${sent} user${sent !== 1 ? 's' : ''} with nothing listed yet.`;
+  } catch(err) {
+    resultEl.textContent = `Error: ${err.message}`;
+  }
+  btn.disabled = false; btn.textContent = 'Nudge all';
 }
 
 async function loadModerationCases() {
