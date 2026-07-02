@@ -353,44 +353,35 @@
   <!-- MODERATION -->
   <div id="panel-moderation" class="panel">
 
-    <div class="card" style="margin-bottom:16px">
-      <div class="card-header"><h2>🚨 Fraud flags</h2><span id="fraudCount" style="font-size:13px;color:#6B7280"></span></div>
-      <p style="padding:8px 18px 0;font-size:13px;color:#6B7280;margin:0">Users with stuck swaps, disputes, or no-show reports.</p>
-      <div id="fraudFlagsList"></div>
-    </div>
+    <details class="card" open style="margin-bottom:16px">
+      <summary style="padding:12px 14px;cursor:pointer;font-size:13px;font-weight:700;color:#0B1120">
+        🚫 Suspended <span id="modSuspendedCount" style="font-weight:400;color:#6B7280"></span>
+      </summary>
+      <div id="modSuspendedList"></div>
+    </details>
 
-    <div class="card" style="margin-bottom:16px">
-      <div class="card-header"><h2>📋 No-show reports</h2><span id="noShowCount" style="font-size:13px;color:#6B7280"></span></div>
-      <div id="noShowList"></div>
-    </div>
+    <details class="card" open style="margin-bottom:16px">
+      <summary style="padding:12px 14px;cursor:pointer;font-size:13px;font-weight:700;color:#0B1120">
+        ⚠️ Needs attention <span id="modAttentionCount" style="font-weight:400;color:#6B7280"></span>
+      </summary>
+      <p style="padding:0 14px 8px;font-size:12px;color:#6B7280;margin:0">Every open dispute, no-show report, reported message, or flagged pattern for a user, grouped together in one place.</p>
+      <div id="modAttentionList"></div>
+    </details>
 
-    <div class="card" style="margin-bottom:16px">
-      <div class="card-header"><h2>🚩 Reported users</h2></div>
-      <div id="reportedUsersList"></div>
-    </div>
+    <details class="card" style="margin-bottom:16px">
+      <summary style="padding:12px 14px;cursor:pointer;font-size:13px;font-weight:700;color:#0B1120">
+        ✅ Resolved <span id="modResolvedCount" style="font-weight:400;color:#6B7280"></span>
+      </summary>
+      <div id="modResolvedList"></div>
+    </details>
 
-    <div class="card">
-      <div class="card-header"><h2>⚖️ Disputes</h2></div>
-      <div id="disputesList"></div>
-    </div>
-  </div>
-    <div class="card" style="margin-bottom:16px">
-      <div class="card-header"><h2>Reported users</h2></div>
-      <div id="reportedUsersTable"></div>
-    </div>
-    <div class="card">
-      <div class="card-header">
-        <h2>Disputes</h2>
-        <select id="disputeFilter" onchange="loadDisputes()">
-          <option value="">All statuses</option>
-          <option value="open">Open</option>
-          <option value="reviewing">Reviewing</option>
-          <option value="resolved">Resolved</option>
-          <option value="dismissed">Dismissed</option>
-        </select>
-      </div>
-      <div id="disputesTable"></div>
-    </div>
+    <details class="card">
+      <summary style="padding:12px 14px;cursor:pointer;font-size:13px;font-weight:700;color:#0B1120">
+        📜 Action log
+      </summary>
+      <p style="padding:0 14px 8px;font-size:12px;color:#6B7280;margin:0">A record of every suspend, warning, and dispute decision you've made.</p>
+      <div id="modActionLog"></div>
+    </details>
   </div>
 
   <!-- INVITES -->
@@ -457,12 +448,8 @@
 
 <div id="panel-ambassador" class="panel" style="padding:0">
   <div class="content" style="padding-top:0">
-    <div class="section-title" style="padding-top:16px" id="ambassadorPendingTitle">Pending requests</div>
+    <div class="section-title" style="padding-top:16px">Ambassador requests</div>
     <div class="card" id="ambassadorList">
-      <div class="empty">Loading...</div>
-    </div>
-    <div class="section-title" id="ambassadorAwardedTitle">Already awarded</div>
-    <div class="card" id="ambassadorAwardedList">
       <div class="empty">Loading...</div>
     </div>
   </div>
@@ -499,7 +486,7 @@
   <div class="content" style="padding-top:0">
     <div class="section-title" style="padding-top:16px">More sections</div>
     <div class="card">
-      <button onclick="showTab('ambassador')" style="display:flex;align-items:center;gap:12px;width:100%;padding:14px;background:none;border:none;border-bottom:1px solid #f0f0f0;font-family:inherit;font-size:14px;font-weight:600;color:#0B1120;text-align:left;cursor:pointer">🏅 Ambassador badges</button>
+      <button onclick="showTab('ambassador')" style="display:flex;align-items:center;gap:12px;width:100%;padding:14px;background:none;border:none;border-bottom:1px solid #f0f0f0;font-family:inherit;font-size:14px;font-weight:600;color:#0B1120;text-align:left;cursor:pointer">🏅 Ambassador requests</button>
       <button onclick="showTab('analytics')" style="display:flex;align-items:center;gap:12px;width:100%;padding:14px;background:none;border:none;border-bottom:1px solid #f0f0f0;font-family:inherit;font-size:14px;font-weight:600;color:#0B1120;text-align:left;cursor:pointer">📊 Analytics</button>
       <button onclick="showTab('moderation')" style="display:flex;align-items:center;gap:12px;width:100%;padding:14px;background:none;border:none;border-bottom:1px solid #f0f0f0;font-family:inherit;font-size:14px;font-weight:600;color:#0B1120;text-align:left;cursor:pointer">🛡 Moderation</button>
       <button onclick="showTab('invites')" style="display:flex;align-items:center;gap:12px;width:100%;padding:14px;background:none;border:none;border-bottom:1px solid #f0f0f0;font-family:inherit;font-size:14px;font-weight:600;color:#0B1120;text-align:left;cursor:pointer">🎟 Invite Codes</button>
@@ -521,6 +508,7 @@ window.onerror = function(msg, src, line) {
 const API_BASE = (window.location.hostname === 'panini-swap-production-69ef.up.railway.app') ? '/api' : 'https://panini-swap-production-69ef.up.railway.app/api';
 let adminSecret = new URLSearchParams(window.location.search).get('s') || '';
 let allUsers = [];
+let modCases = [];
 
 function showTab(name) {
   const allPanels = ['overview','analytics','users','swaps','messages','moderation','invites','feedback','donations','more'];
@@ -536,7 +524,7 @@ function showTab(name) {
 
   if (name === 'swaps') loadSwaps();
   if (name === 'donations') loadDonations();
-  if (name === 'moderation') { loadReportedUsers(); loadDisputes(); loadFraudFlags(); loadNoShowReports(); }
+  if (name === 'moderation') { loadModerationCases(); loadActionLog(); }
   if (name === 'messages') loadAdminMessages();
   if (name === 'ambassador') loadAmbassador();
   if (name === 'analytics') {
@@ -589,15 +577,13 @@ async function refreshAll() {
     loadOverview(),
     loadUsers(),
     loadSwaps(),
-    loadReportedUsers(),
-    loadDisputes(),
+    loadModerationCases(),
+    loadActionLog(),
     loadInvites(),
     loadFeedback(),
     loadDonations(),
     loadAnalytics(),
     loadHealth(),
-    loadFraudFlags(),
-    loadNoShowReports(),
     loadFutureCollections(),
     loadAnnouncements(),
     loadAdminMessages(),
@@ -1270,43 +1256,123 @@ async function autoNudge() {
   btn.disabled = false; btn.textContent = 'Run now';
 }
 
-async function loadFraudFlags() {
+async function loadModerationCases() {
   try {
-    const data = await adminFetch('/admin/fraud-flags');
-    document.getElementById('fraudCount').textContent = `${data.length} flagged`;
-    const el = document.getElementById('fraudFlagsList');
-    if (!data.length) { el.innerHTML = '<div class="empty">No fraud flags. 🎉</div>'; return; }
-    el.innerHTML = `<div class="table-wrap"><table>
-      <thead><tr><th>User</th><th>Stuck swaps</th><th>Disputes</th><th>No-show reports</th><th>Times reported</th><th></th></tr></thead>
-      <tbody>${data.map(u => `<tr>
-        <td><strong>${e(u.name)}</strong><div style="font-size:11px;color:#6B7280">${e(u.email)}</div></td>
-        <td style="color:${u.stuck_accepted_swaps > 0 ? '#EF4444' : '#6B7280'}">${u.stuck_accepted_swaps}</td>
-        <td style="color:${u.disputed_swaps > 0 ? '#EF4444' : '#6B7280'}">${u.disputed_swaps}</td>
-        <td style="color:${u.no_show_reports > 0 ? '#EF4444' : '#6B7280'}">${u.no_show_reports}</td>
-        <td>${u.times_reported || 0}</td>
-        <td><button class="btn-small btn-danger" onclick="toggleSuspend(${u.id}, true)">Suspend</button></td>
-      </tr>`).join('')}
-      </tbody></table></div>`;
-  } catch(err) { document.getElementById('fraudFlagsList').innerHTML = `<div class="empty">Error: ${err.message}</div>`; }
+    modCases = await adminFetch('/admin/moderation/cases');
+    renderModerationCases();
+  } catch(err) {
+    ['modSuspendedList','modAttentionList','modResolvedList'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.innerHTML = `<div class="empty">Error: ${e(err.message)}</div>`;
+    });
+  }
 }
 
-async function loadNoShowReports() {
+function renderModerationCases() {
+  const suspended = modCases.filter(c => c.section === 'suspended');
+  const attention = modCases.filter(c => c.section === 'needs_attention');
+  const resolved  = modCases.filter(c => c.section === 'resolved');
+
+  document.getElementById('modSuspendedCount').textContent = `(${suspended.length})`;
+  document.getElementById('modAttentionCount').textContent = `(${attention.length})`;
+  document.getElementById('modResolvedCount').textContent = `(${resolved.length})`;
+
+  document.getElementById('modSuspendedList').innerHTML = suspended.length
+    ? suspended.map(renderCaseCard).join('') : '<div class="empty">No suspended users.</div>';
+  document.getElementById('modAttentionList').innerHTML = attention.length
+    ? attention.map(renderCaseCard).join('') : '<div class="empty">Nothing needs attention. 🎉</div>';
+  document.getElementById('modResolvedList').innerHTML = resolved.length
+    ? resolved.map(renderCaseCard).join('') : '<div class="empty">No resolved cases yet.</div>';
+}
+
+function severityBadge(sev) {
+  const map = { high: ['badge-red','High'], medium: ['badge-amber','Medium'], low: ['badge-grey','Low'] };
+  const [cls, label] = map[sev] || map.low;
+  return `<span class="badge ${cls}">${label}</span>`;
+}
+
+function renderCaseCard(c) {
+  const disputesHtml = c.disputes.map(d => `
+    <div style="padding:8px 0;border-top:1px solid #f0f0f0">
+      <div style="font-size:12px"><strong>Dispute</strong> on swap #${d.swap_id} — ${e(d.reason.replace(/_/g,' '))}
+        <span class="badge badge-${d.status==='open'?'amber':d.status==='resolved'?'green':d.status==='dismissed'?'grey':'blue'}" style="margin-left:6px">${e(d.status)}</span>
+      </div>
+      ${d.details ? `<div style="font-size:12px;color:#6B7280;margin-top:2px">"${e(d.details)}"</div>` : ''}
+      <div style="font-size:11px;color:#9CA3AF;margin-top:2px">Raised by ${e(d.raised_by_name)} · ${new Date(d.created_at).toLocaleDateString()}</div>
+      ${!['resolved','dismissed'].includes(d.status) ? `
+        <div style="margin-top:6px;display:flex;gap:4px">
+          <button class="btn-small btn-secondary" onclick="updateDispute(${d.id},'resolved')">Resolve</button>
+          <button class="btn-small btn-secondary" onclick="updateDispute(${d.id},'dismissed')">Dismiss</button>
+        </div>` : ''}
+    </div>`).join('');
+
+  const noShowsHtml = c.no_show_reports.map(r => `
+    <div style="padding:8px 0;border-top:1px solid #f0f0f0;font-size:12px">
+      <strong>No-show report</strong> on swap #${r.swap_id} from ${e(r.reporter_name)}
+      ${r.notes ? `<div style="color:#6B7280;margin-top:2px">"${e(r.notes)}"</div>` : ''}
+      <div style="font-size:11px;color:#9CA3AF;margin-top:2px">${new Date(r.created_at).toLocaleDateString()}</div>
+    </div>`).join('');
+
+  const msgsHtml = c.reported_messages.map(m => `
+    <div style="padding:8px 0;border-top:1px solid #f0f0f0;font-size:12px">
+      <strong>Reported message</strong><div style="color:#6B7280;margin-top:2px">"${e(m.body)}"</div>
+      <div style="font-size:11px;color:#9CA3AF;margin-top:2px">${new Date(m.created_at).toLocaleDateString()}</div>
+    </div>`).join('');
+
+  const nothingElse = !disputesHtml && !noShowsHtml && !msgsHtml
+    ? '<div style="font-size:12px;color:#9CA3AF;padding-top:8px">No open items — flagged from account history.</div>' : '';
+
+  return `<details style="border-top:1px solid #f0f0f0">
+    <summary style="padding:12px 14px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+      <span style="font-size:13px"><strong>${e(c.name)}</strong> <span style="color:#6B7280;font-size:11px">${e(c.email)}</span></span>
+      <span style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        ${severityBadge(c.severity)}
+        ${c.times_reported > 0 ? `<span class="badge badge-red">${c.times_reported}× reported</span>` : ''}
+        ${c.open_dispute_count > 0 ? `<span class="badge badge-amber">${c.open_dispute_count} open dispute${c.open_dispute_count>1?'s':''}</span>` : ''}
+      </span>
+    </summary>
+    <div style="padding:0 14px 14px">
+      ${disputesHtml}${noShowsHtml}${msgsHtml}${nothingElse}
+      <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn-small ${c.is_suspended?'btn-secondary':'btn-danger'}" onclick="toggleSuspend(${c.id}, ${!c.is_suspended})">${c.is_suspended?'Unsuspend':'Suspend'}</button>
+        <button class="btn-small btn-secondary" onclick="promptWarn(${c.id}, '${e(c.name).replace(/'/g,"\\'")}')">Send warning</button>
+        ${c.section === 'resolved'
+          ? `<button class="btn-small btn-secondary" onclick="setCaseStatus(${c.id}, false)">Reopen case</button>`
+          : `<button class="btn-small btn-secondary" onclick="setCaseStatus(${c.id}, true)">Mark case resolved</button>`}
+      </div>
+    </div>
+  </details>`;
+}
+
+async function setCaseStatus(userId, resolved) {
   try {
-    const data = await adminFetch('/reports');
-    document.getElementById('noShowCount').textContent = `${data.length} reports`;
-    const el = document.getElementById('noShowList');
-    if (!data.length) { el.innerHTML = '<div class="empty">No no-show reports yet.</div>'; return; }
+    await adminFetch(`/admin/moderation/case/${userId}/resolve`, { method:'POST', body: JSON.stringify({ resolved }) });
+    loadModerationCases();
+  } catch(err) { alert(err.message); }
+}
+
+function promptWarn(userId, name) {
+  const message = prompt(`Warning message to ${name}:`);
+  if (!message || !message.trim()) return;
+  adminFetch('/admin/moderation/warn', { method:'POST', body: JSON.stringify({ userId, message }) })
+    .then(() => { alert('Warning sent.'); loadModerationCases(); loadActionLog(); })
+    .catch(err => alert(err.message));
+}
+
+async function loadActionLog() {
+  try {
+    const log = await adminFetch('/admin/moderation/log');
+    const el = document.getElementById('modActionLog');
+    if (!log.length) { el.innerHTML = '<div class="empty">No actions logged yet.</div>'; return; }
     el.innerHTML = `<div class="table-wrap"><table>
-      <thead><tr><th>Reported user</th><th>Reported by</th><th>Swap</th><th>Notes</th><th>When</th></tr></thead>
-      <tbody>${data.map(r => `<tr>
-        <td><strong>${e(r.reported_name)}</strong><div style="font-size:11px;color:#6B7280">${e(r.reported_email)} · ${r.total_reports_against} total reports</div></td>
-        <td style="font-size:12px">${e(r.reporter_name)}</td>
-        <td style="font-size:12px">#${r.swap_id}</td>
-        <td style="font-size:12px;color:#6B7280">${r.notes ? e(r.notes) : '—'}</td>
-        <td style="font-size:12px;color:#6B7280">${new Date(r.created_at).toLocaleDateString()}</td>
-      </tr>`).join('')}
-      </tbody></table></div>`;
-  } catch(err) { document.getElementById('noShowList').innerHTML = `<div class="empty">Error: ${err.message}</div>`; }
+      <thead><tr><th>Action</th><th>User</th><th>Note</th><th>When</th></tr></thead>
+      <tbody>${log.map(a => `<tr>
+        <td><span class="badge badge-blue">${e(a.action_type.replace(/_/g,' '))}</span></td>
+        <td>${e(a.target_user_name||'—')}<div style="font-size:11px;color:#6B7280">${e(a.target_user_email||'')}</div></td>
+        <td style="font-size:12px;color:#6B7280">${a.note ? e(a.note) : '—'}</td>
+        <td style="font-size:12px;color:#6B7280">${new Date(a.created_at).toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}</td>
+      </tr>`).join('')}</tbody></table></div>`;
+  } catch(err) { document.getElementById('modActionLog').innerHTML = `<div class="empty">Error: ${e(err.message)}</div>`; }
 }
 
 async function loadOverview() {
@@ -1450,11 +1516,6 @@ function renderUsers(users) {
             onclick="toggleSuspend(${u.id}, ${!u.is_suspended})">
             ${u.is_suspended ? 'Unsuspend' : 'Suspend'}
           </button>
-          ${!u.email_verified && !u.is_suspended ? `
-          <button class="btn-small btn-primary" style="margin-top:4px;display:block;width:100%"
-            onclick="verifyEmail(${u.id})">
-            Verify email
-          </button>` : ''}
         </td>
       </tr>`;
     } catch(err) {
@@ -1478,43 +1539,6 @@ function renderUsers(users) {
     </tr></thead>
     <tbody>${rows}</tbody>
   </table></div>`;
-}
-
-async function loadReportedUsers() {
-  try {
-    const users = await adminFetch('/admin/reported-users');
-    const el = document.getElementById('reportedUsersTable');
-    if (!users.length) { el.innerHTML = '<div class="empty">No reported users.</div>'; return; }
-    el.innerHTML = `<div class="table-wrap"><table>
-      <thead><tr><th>Name</th><th>Email</th><th>Times reported</th><th>Status</th><th></th></tr></thead>
-      <tbody>${users.map(u => `<tr>
-        <td>${e(u.name)}</td><td>${e(u.email)}</td><td>${u.times_reported}</td>
-        <td><span class="badge ${u.is_suspended?'badge-red':'badge-green'}">${u.is_suspended?'Suspended':'Active'}</span></td>
-        <td><button class="btn-small ${u.is_suspended?'btn-secondary':'btn-danger'}" onclick="toggleSuspend(${u.id},${!u.is_suspended})">${u.is_suspended?'Unsuspend':'Suspend'}</button></td>
-      </tr>`).join('')}</tbody></table></div>`;
-  } catch(e) { console.error('reported', e); }
-}
-
-async function loadDisputes() {
-  const status = document.getElementById('disputeFilter')?.value || '';
-  try {
-    const d = await adminFetch(`/admin/disputes${status?'?status='+status:''}`);
-    const el = document.getElementById('disputesTable');
-    if (!d.length) { el.innerHTML = '<div class="empty">No disputes.</div>'; return; }
-    el.innerHTML = `<div class="table-wrap"><table>
-      <thead><tr><th>Swap</th><th>Raised by</th><th>Against</th><th>Reason</th><th>Status</th><th></th></tr></thead>
-      <tbody>${d.map(x => `<tr>
-        <td>#${x.swap_id}</td>
-        <td>${e(x.raised_by_name)}<div class="analytics-user">${e(x.raised_by_email)}</div></td>
-        <td>${e(x.against_name)} (${x.against_times_reported}×)<div class="analytics-user">${e(x.against_email)}</div></td>
-        <td>${e(x.reason.replace(/_/g,' '))}<br><span style="color:#6B7280;font-size:12px">${e(x.details||'')}</span></td>
-        <td><span class="badge badge-${x.status==='open'?'amber':x.status==='resolved'?'green':'grey'}">${x.status}</span></td>
-        <td style="display:flex;gap:4px;flex-wrap:wrap">
-          ${x.status!=='resolved'?`<button class="btn-small btn-secondary" onclick="updateDispute(${x.id},'resolved')">Resolve</button>`:''}
-          ${x.status!=='dismissed'?`<button class="btn-small btn-secondary" onclick="updateDispute(${x.id},'dismissed')">Dismiss</button>`:''}
-        </td>
-      </tr>`).join('')}</tbody></table></div>`;
-  } catch(err) { console.error('disputes', err); }
 }
 
 async function loadInvites() {
@@ -1745,22 +1769,15 @@ async function toggleSuspend(userId, suspend) {
   if (!confirm(`${suspend?'Suspend':'Unsuspend'} this user?`)) return;
   try {
     await adminFetch(`/admin/users/${userId}/suspend`, { method:'POST', body: JSON.stringify({ suspended: suspend }) });
-    loadUsers(); loadReportedUsers();
-  } catch(e) { alert(e.message); }
-}
-
-async function verifyEmail(userId) {
-  if (!confirm('Mark this user\'s email as verified? Do this once you\'ve confirmed it\'s a real address that just isn\'t receiving our emails.')) return;
-  try {
-    await adminFetch(`/admin/users/${userId}/verify-email`, { method:'POST' });
-    loadUsers();
+    loadUsers(); loadModerationCases(); loadActionLog();
   } catch(e) { alert(e.message); }
 }
 
 async function updateDispute(id, status) {
   try {
     await adminFetch(`/admin/disputes/${id}/status`, { method:'POST', body: JSON.stringify({ status }) });
-    loadDisputes();
+    loadModerationCases();
+    loadActionLog();
   } catch(e) { alert(e.message); }
 }
 
@@ -1783,16 +1800,9 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 async function loadAmbassador() {
-  loadAmbassadorPending();
-  loadAmbassadorAwarded();
-}
-
-async function loadAmbassadorPending() {
   const el = document.getElementById('ambassadorList');
-  const title = document.getElementById('ambassadorPendingTitle');
   try {
     const rows = await adminFetch('/ambassador/admin/pending');
-    title.textContent = `Pending requests (${rows.length})`;
     if (!rows.length) { el.innerHTML = '<div class="empty">No pending ambassador requests.</div>'; return; }
     el.innerHTML = rows.map(r => `
       <div class="feedback-item" id="amb-${r.id}">
@@ -1816,47 +1826,12 @@ async function loadAmbassadorPending() {
   }
 }
 
-async function loadAmbassadorAwarded() {
-  const el = document.getElementById('ambassadorAwardedList');
-  const title = document.getElementById('ambassadorAwardedTitle');
-  try {
-    const rows = await adminFetch('/ambassador/admin/awarded');
-    title.textContent = `Already awarded (${rows.length})`;
-    if (!rows.length) { el.innerHTML = '<div class="empty">No badges awarded yet.</div>'; return; }
-    el.innerHTML = rows.map(r => `
-      <div class="feedback-item" id="amb-awarded-${r.id}">
-        <div style="display:flex;align-items:center;gap:10px">
-          <div style="width:36px;height:36px;border-radius:50%;background:#0B1120;color:white;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-            ${e(r.name?.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase())}
-          </div>
-          <div style="flex:1;min-width:0">
-            <div style="font-size:13px;font-weight:700;color:#0B1120">🏅 ${e(r.name)}</div>
-            <div style="font-size:11px;color:#9CA3AF">${e(r.email)} · Awarded ${r.ambassador_badge_earned_at ? new Date(r.ambassador_badge_earned_at).toLocaleDateString('en-GB') : 'date unknown'}</div>
-          </div>
-          <button class="btn-small btn-danger" onclick="revokeAmbassador(${r.id}, '${e(r.name || '').replace(/'/g, "\\'")}')">Revoke</button>
-        </div>
-      </div>
-    `).join('');
-  } catch(err) {
-    el.innerHTML = `<div class="empty">Error: ${err.message}</div>`;
-  }
-}
-
-async function revokeAmbassador(userId, name) {
-  if (!confirm(`Revoke the Ambassador badge from ${name}? This cannot be undone automatically — they'd need to resubmit.`)) return;
-  try {
-    await adminFetch(`/ambassador/admin/${userId}/revoke`, { method: 'POST' });
-    loadAmbassadorAwarded();
-  } catch(err) { alert(err.message); }
-}
-
 async function approveAmbassador(id) {
   try {
     await adminFetch(`/ambassador/admin/${id}/approve`, { method: 'POST' });
     document.getElementById(`amb-${id}`).style.opacity = '0.4';
     document.getElementById(`amb-${id}`).querySelectorAll('button').forEach(b => b.disabled = true);
     document.getElementById(`amb-${id}`).querySelector('.btn-primary').textContent = '✅ Approved';
-    loadAmbassadorAwarded();
   } catch(err) { alert(err.message); }
 }
 
