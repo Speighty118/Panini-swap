@@ -66,43 +66,6 @@ router.post('/submit', requireAuth, async (req, res) => {
   }
 });
 
-// GET /api/ambassador/admin/awarded — list users who already have the badge
-router.get('/admin/awarded', requireAdmin, async (req, res) => {
-  try {
-    const { rows } = await pool.query(
-      `SELECT u.id, u.name, u.email, u.ambassador_badge_earned_at,
-              s.swap_id
-       FROM users u
-       LEFT JOIN ambassador_submissions s ON s.user_id = u.id AND s.status = 'approved'
-       WHERE u.ambassador_badge = true
-       ORDER BY u.ambassador_badge_earned_at DESC NULLS LAST`
-    );
-    res.json(rows);
-  } catch (err) {
-    console.error('Ambassador awarded list error:', err.message);
-    res.status(500).json({ error: 'Failed to load awarded ambassadors' });
-  }
-});
-
-// POST /api/ambassador/admin/:userId/revoke — remove a badge awarded in error
-router.post('/admin/:userId/revoke', requireAdmin, async (req, res) => {
-  const { userId } = req.params;
-  try {
-    await pool.query(
-      `UPDATE users SET ambassador_badge = false, ambassador_badge_earned_at = NULL WHERE id = $1`,
-      [userId]
-    );
-    await pool.query(
-      `UPDATE ambassador_submissions SET status = 'rejected', reviewed_at = NOW() WHERE user_id = $1`,
-      [userId]
-    );
-    res.json({ success: true });
-  } catch (err) {
-    console.error('Ambassador revoke error:', err.message);
-    res.status(500).json({ error: 'Failed to revoke badge' });
-  }
-});
-
 // GET /api/ambassador/admin/pending — list pending submissions for admin
 router.get('/admin/pending', requireAdmin, async (req, res) => {
   try {
@@ -163,6 +126,51 @@ router.post('/admin/:id/reject', requireAdmin, async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Failed to reject' });
+  }
+});
+
+// ----------------------------------------------------------------
+// GET /api/ambassador/admin/awarded — list everyone currently
+// holding the badge, most recently awarded first.
+// ----------------------------------------------------------------
+router.get('/admin/awarded', requireAdmin, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, name, email, ambassador_badge_earned_at
+       FROM users
+       WHERE ambassador_badge = TRUE
+       ORDER BY ambassador_badge_earned_at DESC NULLS LAST`
+    );
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to load awarded ambassadors' });
+  }
+});
+
+// ----------------------------------------------------------------
+// POST /api/ambassador/admin/:userId/revoke — remove the badge
+// ----------------------------------------------------------------
+router.post('/admin/:userId/revoke', requireAdmin, async (req, res) => {
+  const { userId } = req.params;
+  try {
+    const { rows } = await pool.query(
+      `UPDATE users SET ambassador_badge = FALSE, ambassador_badge_earned_at = NULL
+       WHERE id = $1 RETURNING id, name`,
+      [userId]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'User not found' });
+
+    // Mark their submission as revoked too, so /submit doesn't treat
+    // them as still-approved and block a future resubmission.
+    await pool.query(
+      `UPDATE ambassador_submissions SET status = 'revoked', reviewed_at = NOW() WHERE user_id = $1`,
+      [userId]
+    );
+
+    res.json({ success: true, name: rows[0].name });
+  } catch (err) {
+    console.error('Ambassador revoke error:', err.message);
+    res.status(500).json({ error: 'Failed to revoke badge' });
   }
 });
 
