@@ -66,6 +66,25 @@ router.post('/', requireAuth, async (req, res) => {
     );
 
     await client.query('COMMIT');
+
+    // Let the person know they've been rated — fires after commit,
+    // fire-and-forget so a notification hiccup can't undo the rating.
+    try {
+      const { createNotification } = require('./notifications');
+      const { rows: raterRows } = await pool.query('SELECT name FROM users WHERE id = $1', [userId]);
+      const raterName = raterRows[0]?.name || 'Someone';
+      const stars_display = '⭐'.repeat(stars);
+      await createNotification(pool, {
+        userId: rateeId,
+        type: 'rating_received',
+        title: `${stars_display} New rating from ${raterName}`,
+        body: comment ? `"${comment.slice(0, 120)}"` : `${raterName} rated your swap ${stars} star${stars !== 1 ? 's' : ''}.`,
+        swapId,
+      });
+    } catch (notifyErr) {
+      console.error('Rating notification error:', notifyErr);
+    }
+
     res.status(201).json({ success: true, newRatingAvg: avg_stars, newRatingCount: cnt });
   } catch (err) {
     await client.query('ROLLBACK');
