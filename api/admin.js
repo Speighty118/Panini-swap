@@ -132,6 +132,36 @@ router.post('/disputes/:id/status', async (req, res) => {
     }
 
     await client.query('COMMIT');
+
+    // Let both people know the outcome, so you're not manually
+    // messaging everyone for the routine cases. Fires after commit —
+    // a failed notification shouldn't undo the resolution itself.
+    if (['resolved', 'dismissed'].includes(status)) {
+      try {
+        const { createNotification } = require('./notifications');
+        const outcomeText = status === 'resolved'
+          ? 'has been reviewed and resolved'
+          : 'has been reviewed — no action was needed';
+
+        await createNotification(pool, {
+          userId: dispute.raised_by_id,
+          type: 'dispute_update',
+          title: '⚖️ Update on your report',
+          body: `Your report about swap #${dispute.swap_id} ${outcomeText}.`,
+          swapId: dispute.swap_id,
+        });
+        await createNotification(pool, {
+          userId: dispute.against_id,
+          type: 'dispute_update',
+          title: '⚖️ Update on a report against you',
+          body: `A report about swap #${dispute.swap_id} ${outcomeText}.`,
+          swapId: dispute.swap_id,
+        });
+      } catch (notifyErr) {
+        console.error('Dispute outcome notification error:', notifyErr);
+      }
+    }
+
     res.json(dispute);
   } catch (err) {
     await client.query('ROLLBACK');
@@ -735,6 +765,21 @@ router.post('/auto-nudge', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Auto-nudge failed' });
+  }
+});
+
+// ----------------------------------------------------------------
+// POST /api/admin/run-posting-reminders
+// Manual trigger for the "post your stickers" reminder job.
+// ----------------------------------------------------------------
+router.post('/run-posting-reminders', async (req, res) => {
+  try {
+    const { sendPostingReminders } = require('../jobs/send_posting_reminders');
+    await sendPostingReminders();
+    res.json({ success: true, ranAt: new Date().toISOString() });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Posting reminder job failed' });
   }
 });
 
