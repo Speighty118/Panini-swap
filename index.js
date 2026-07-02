@@ -293,6 +293,24 @@ app.all('/api/internal/run-reminders', async (req, res) => {
   }
 });
 
+// ---- Internal: trigger the "post your stickers" reminder job ----
+// Set up a new cron job hitting this URL every few hours. Nudges
+// anyone who accepted a swap 48+ hours ago but hasn't posted yet.
+app.all('/api/internal/run-posting-reminders', async (req, res) => {
+  const providedSecret = req.query.secret;
+  if (!process.env.CRON_SECRET || providedSecret !== process.env.CRON_SECRET) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  try {
+    const { sendPostingReminders } = require('./jobs/send_posting_reminders');
+    await sendPostingReminders();
+    res.json({ success: true, ranAt: new Date().toISOString() });
+  } catch (err) {
+    console.error('Posting reminder job failed:', err.message);
+    res.status(500).json({ error: 'Posting reminder job failed' });
+  }
+});
+
 // ---- Internal: trigger the "confirm receipt" reminder job ----
 // Set up a new cron job hitting this URL every few hours. Nudges
 // anyone who hasn't confirmed receipt on a swap that's been sitting
