@@ -76,22 +76,69 @@ router.get('/disputes', async (req, res) => {
 // Body: { status }  — one of: reviewing, resolved, dismissed
 // ----------------------------------------------------------------
 router.post('/disputes/:id/status', async (req, res) => {
-  const { status } = req.body;
+  const { status, note } = req.body;
   const valid = ['open', 'reviewing', 'resolved', 'dismissed'];
   if (!valid.includes(status)) {
     return res.status(400).json({ error: `status must be one of: ${valid.join(', ')}` });
   }
+  const client = await pool.connect();
   try {
+    await client.query('BEGIN');
+
     const resolvedAt = ['resolved', 'dismissed'].includes(status) ? new Date() : null;
-    const { rows } = await pool.query(
+    const { rows } = await client.query(
       `UPDATE disputes SET status = $1, resolved_at = $2 WHERE id = $3 RETURNING *`,
       [status, resolvedAt, req.params.id]
     );
-    if (!rows[0]) return res.status(404).json({ error: 'Dispute not found' });
-    res.json(rows[0]);
+    const dispute = rows[0];
+    if (!dispute) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Dispute not found' });
+    }
+
+    // Sync the linked swap so it doesn't stay stuck showing "disputed"
+    // forever once you've actually dealt with it. Only touches the swap
+    // if it's still sitting at 'disputed' — won't clobber anything else.
+    if (['resolved', 'dismissed'].includes(status)) {
+      await client.query(
+        `UPDATE swaps SET status = 'declined',
+         decline_reason = $1, updated_at = NOW()
+         WHERE id = $2 AND status = 'disputed'`,
+        [`Manually resolved by admin — dispute marked ${status}`, dispute.swap_id]
+      );
+    }
+
+    await client.query(
+      `INSERT INTO admin_actions (action_type, target_user_id, target_dispute_id, note)
+       VALUES ($1, $2, $3, $4)`,
+      [`dispute_${status}`, dispute.against_id, dispute.id, note || null]
+    );
+
+    // If that was this user's last open dispute, auto-clear their case
+    // into the Resolved section — saves a manual click for the common case.
+    if (['resolved', 'dismissed'].includes(status)) {
+      const { rows: openLeft } = await client.query(
+        `SELECT COUNT(*) FROM disputes WHERE against_id = $1 AND status IN ('open', 'reviewing')`,
+        [dispute.against_id]
+      );
+      if (parseInt(openLeft[0].count, 10) === 0) {
+        await client.query(
+          `INSERT INTO moderation_case_status (user_id, status, updated_at)
+           VALUES ($1, 'resolved', NOW())
+           ON CONFLICT (user_id) DO UPDATE SET status = 'resolved', updated_at = NOW()`,
+          [dispute.against_id]
+        );
+      }
+    }
+
+    await client.query('COMMIT');
+    res.json(dispute);
   } catch (err) {
+    await client.query('ROLLBACK');
     console.error(err);
     res.status(500).json({ error: 'Failed to update dispute' });
+  } finally {
+    client.release();
   }
 });
 
@@ -100,7 +147,7 @@ router.post('/disputes/:id/status', async (req, res) => {
 // Body: { suspended: true | false }
 // ----------------------------------------------------------------
 router.post('/users/:id/suspend', async (req, res) => {
-  const { suspended } = req.body;
+  const { suspended, note } = req.body;
   if (typeof suspended !== 'boolean') {
     return res.status(400).json({ error: 'suspended must be true or false' });
   }
@@ -110,31 +157,14 @@ router.post('/users/:id/suspend', async (req, res) => {
       [suspended, req.params.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'User not found' });
+    await pool.query(
+      `INSERT INTO admin_actions (action_type, target_user_id, note) VALUES ($1, $2, $3)`,
+      [suspended ? 'suspend' : 'unsuspend', req.params.id, note || null]
+    ).catch(() => {}); // don't fail the suspend if logging has an issue
     res.json(rows[0]);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to update suspension status' });
-  }
-});
-
-// ----------------------------------------------------------------
-// POST /api/admin/users/:id/verify-email
-// Manually mark a user's email as verified — for cases where the
-// verification email never arrived (spam filters, typo'd address
-// that was later corrected, etc).
-// ----------------------------------------------------------------
-router.post('/users/:id/verify-email', async (req, res) => {
-  try {
-    const { rows } = await pool.query(
-      `UPDATE users SET email_verified = TRUE, verification_token = NULL, verification_token_expires = NULL
-       WHERE id = $1 RETURNING id, name, email, email_verified`,
-      [req.params.id]
-    );
-    if (!rows[0]) return res.status(404).json({ error: 'User not found' });
-    res.json(rows[0]);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to verify email' });
   }
 });
 
@@ -746,6 +776,256 @@ router.get('/fraud-flags', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to fetch fraud flags' });
+  }
+});
+
+// ----------------------------------------------------------------
+// GET /api/admin/moderation/cases
+// Unified moderation view: one row per flagged user, combining
+// disputes, no-show reports, reported messages, and times_reported
+// into a single case, with a severity rating and a section
+// ('suspended' | 'needs_attention' | 'resolved') the dashboard
+// uses to sort things into collapsible groups.
+// ----------------------------------------------------------------
+router.get('/moderation/cases', async (req, res) => {
+  try {
+    const { rows: candidateRows } = await pool.query(`
+      SELECT DISTINCT id FROM (
+        SELECT id FROM users WHERE times_reported > 0
+        UNION SELECT against_id AS id FROM disputes
+        UNION SELECT reported_user_id AS id FROM no_show_reports
+        UNION SELECT sender_id AS id FROM direct_messages WHERE reported = TRUE
+        UNION SELECT user_id AS id FROM moderation_case_status
+      ) t
+    `);
+    const userIds = candidateRows.map(r => r.id);
+    if (!userIds.length) return res.json([]);
+
+    const [usersRes, disputesRes, noShowRes, msgRes, stuckRes, statusRes] = await Promise.all([
+      pool.query(
+        `SELECT id, name, email, times_reported, is_suspended, created_at
+         FROM users WHERE id = ANY($1::int[])`,
+        [userIds]
+      ),
+      pool.query(
+        `SELECT d.*, raiser.name AS raised_by_name, raiser.email AS raised_by_email
+         FROM disputes d
+         JOIN users raiser ON raiser.id = d.raised_by_id
+         WHERE d.against_id = ANY($1::int[])
+         ORDER BY d.created_at DESC`,
+        [userIds]
+      ),
+      pool.query(
+        `SELECT nr.*, reporter.name AS reporter_name
+         FROM no_show_reports nr
+         JOIN users reporter ON reporter.id = nr.reporter_id
+         WHERE nr.reported_user_id = ANY($1::int[])
+         ORDER BY nr.created_at DESC`,
+        [userIds]
+      ),
+      pool.query(
+        `SELECT dm.id, dm.sender_id, dm.body, dm.created_at
+         FROM direct_messages dm
+         WHERE dm.sender_id = ANY($1::int[]) AND dm.reported = TRUE
+         ORDER BY dm.created_at DESC`,
+        [userIds]
+      ),
+      pool.query(
+        `SELECT u.id,
+                COUNT(DISTINCT s_stuck.id) AS stuck_accepted_swaps,
+                COUNT(DISTINCT s_disputed.id) AS disputed_swaps
+         FROM users u
+         LEFT JOIN swaps s_stuck ON (s_stuck.user_a_id = u.id OR s_stuck.user_b_id = u.id)
+           AND s_stuck.status = 'accepted' AND s_stuck.updated_at < NOW() - INTERVAL '7 days'
+         LEFT JOIN swaps s_disputed ON (s_disputed.user_a_id = u.id OR s_disputed.user_b_id = u.id)
+           AND s_disputed.status = 'disputed'
+         WHERE u.id = ANY($1::int[])
+         GROUP BY u.id`,
+        [userIds]
+      ),
+      pool.query(`SELECT * FROM moderation_case_status WHERE user_id = ANY($1::int[])`, [userIds]),
+    ]);
+
+    const disputesByUser = {};
+    disputesRes.rows.forEach(d => { (disputesByUser[d.against_id] = disputesByUser[d.against_id] || []).push(d); });
+    const noShowByUser = {};
+    noShowRes.rows.forEach(r => { (noShowByUser[r.reported_user_id] = noShowByUser[r.reported_user_id] || []).push(r); });
+    const msgByUser = {};
+    msgRes.rows.forEach(m => { (msgByUser[m.sender_id] = msgByUser[m.sender_id] || []).push(m); });
+    const stuckByUser = Object.fromEntries(stuckRes.rows.map(r => [r.id, r]));
+    const statusByUser = Object.fromEntries(statusRes.rows.map(r => [r.user_id, r]));
+
+    const cases = usersRes.rows.map(u => {
+      const disputes = disputesByUser[u.id] || [];
+      const noShows = noShowByUser[u.id] || [];
+      const reportedMsgs = msgByUser[u.id] || [];
+      const stuck = stuckByUser[u.id] || { stuck_accepted_swaps: 0, disputed_swaps: 0 };
+      const openDisputes = disputes.filter(d => ['open', 'reviewing'].includes(d.status));
+      const manualStatus = statusByUser[u.id] && statusByUser[u.id].status;
+
+      let section;
+      if (u.is_suspended) section = 'suspended';
+      else if (openDisputes.length > 0 || u.times_reported > 0 || parseInt(stuck.stuck_accepted_swaps, 10) > 0) {
+        section = 'needs_attention';
+      } else if (manualStatus === 'needs_attention') {
+        section = 'needs_attention';
+      } else {
+        section = 'resolved';
+      }
+
+      const severity =
+        u.times_reported >= 3 || parseInt(stuck.stuck_accepted_swaps, 10) > 0 || openDisputes.length > 1
+          ? 'high'
+          : u.times_reported > 0 || openDisputes.length > 0 || noShows.length > 0
+          ? 'medium'
+          : 'low';
+
+      return {
+        id: u.id,
+        name: u.name,
+        email: u.email,
+        is_suspended: u.is_suspended,
+        times_reported: u.times_reported || 0,
+        created_at: u.created_at,
+        disputes,
+        no_show_reports: noShows,
+        reported_messages: reportedMsgs,
+        stuck_accepted_swaps: parseInt(stuck.stuck_accepted_swaps, 10) || 0,
+        open_dispute_count: openDisputes.length,
+        section,
+        severity,
+        case_note: (statusByUser[u.id] && statusByUser[u.id].note) || null,
+      };
+    });
+
+    const order = { high: 0, medium: 1, low: 2 };
+    cases.sort((a, b) => order[a.severity] - order[b.severity]);
+
+    res.json(cases);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch moderation cases' });
+  }
+});
+
+// ----------------------------------------------------------------
+// POST /api/admin/moderation/case/:userId/resolve
+// Body: { resolved: true|false, note }
+// Manually marks a flagged user's case as resolved or reopened —
+// this is what moves them between the Needs attention and
+// Resolved sections when there's nothing left auto-tracking it
+// (e.g. a no-show report, which has no built-in status).
+// ----------------------------------------------------------------
+router.post('/moderation/case/:userId/resolve', async (req, res) => {
+  const { resolved, note } = req.body;
+  const status = resolved ? 'resolved' : 'needs_attention';
+  try {
+    await pool.query(
+      `INSERT INTO moderation_case_status (user_id, status, note, updated_at)
+       VALUES ($1, $2, $3, NOW())
+       ON CONFLICT (user_id) DO UPDATE SET status = $2, note = $3, updated_at = NOW()`,
+      [req.params.userId, status, note || null]
+    );
+    await pool.query(
+      `INSERT INTO admin_actions (action_type, target_user_id, note)
+       VALUES ($1, $2, $3)`,
+      [resolved ? 'resolve_case' : 'reopen_case', req.params.userId, note || null]
+    );
+    res.json({ success: true, status });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to update case status' });
+  }
+});
+
+// ----------------------------------------------------------------
+// POST /api/admin/moderation/warn
+// Body: { userId, message }
+// Sends a warning message to a user (reuses the same admin-support
+// conversation as /messages/send) and logs it as a moderation action.
+// ----------------------------------------------------------------
+router.post('/moderation/warn', async (req, res) => {
+  const { userId, message } = req.body;
+  if (!userId || !message || !message.trim()) {
+    return res.status(400).json({ error: 'userId and message are required' });
+  }
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const ADMIN_SENDER_ID = 121; // "Got One Spare? Support" system account
+
+    const { rows: existing } = await client.query(
+      `SELECT c.id FROM conversations c
+       JOIN conversation_participants cp1 ON cp1.conversation_id = c.id AND cp1.user_id = $1
+       JOIN conversation_participants cp2 ON cp2.conversation_id = c.id AND cp2.user_id = $2`,
+      [ADMIN_SENDER_ID, userId]
+    );
+
+    let conversationId;
+    if (existing.length > 0) {
+      conversationId = existing[0].id;
+    } else {
+      const { rows: newConv } = await client.query(`INSERT INTO conversations DEFAULT VALUES RETURNING id`);
+      conversationId = newConv[0].id;
+      await client.query(
+        `INSERT INTO conversation_participants (conversation_id, user_id) VALUES ($1, $2), ($1, $3)`,
+        [conversationId, ADMIN_SENDER_ID, userId]
+      );
+    }
+
+    await client.query(
+      `INSERT INTO direct_messages (conversation_id, sender_id, body) VALUES ($1, $2, $3)`,
+      [conversationId, ADMIN_SENDER_ID, message.trim()]
+    );
+
+    await client.query(
+      `INSERT INTO notifications (user_id, type, title, body)
+       VALUES ($1, 'direct_message', '⚠️ A message from Got One Spare? Support', $2)`,
+      [userId, message.trim().substring(0, 100)]
+    ).catch(() => {});
+
+    await client.query(
+      `INSERT INTO admin_actions (action_type, target_user_id, note) VALUES ('warn', $1, $2)`,
+      [userId, message.trim()]
+    );
+
+    await client.query('COMMIT');
+
+    const { sendPushNotification } = require('./push');
+    sendPushNotification(userId, {
+      title: '⚠️ Message from Got One Spare?',
+      body: message.trim().slice(0, 80),
+    }).catch(() => {});
+
+    res.json({ success: true, conversationId });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error(err);
+    res.status(500).json({ error: 'Failed to send warning' });
+  } finally {
+    client.release();
+  }
+});
+
+// ----------------------------------------------------------------
+// GET /api/admin/moderation/log
+// Recent moderation actions (suspensions, warnings, dispute
+// resolutions, case status changes) — powers the Action log
+// section at the bottom of the Moderation tab.
+// ----------------------------------------------------------------
+router.get('/moderation/log', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT a.*, u.name AS target_user_name, u.email AS target_user_email
+       FROM admin_actions a
+       LEFT JOIN users u ON u.id = a.target_user_id
+       ORDER BY a.created_at DESC
+       LIMIT 200`
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch action log' });
   }
 });
 
