@@ -431,6 +431,51 @@ router.get('/zero-stickers', async (req, res) => {
 });
 
 // ----------------------------------------------------------------
+// POST /api/admin/nudge-zero-stickers
+// Sends a notification (and push, where subscribed) to every user
+// who's signed up but never added a duplicate or a need — a
+// different message to the general auto-nudge, since these users
+// haven't got anything to swap with yet. Respects the same
+// last_nudge_at cooldown so it can be run safely more than once.
+// ----------------------------------------------------------------
+router.post('/nudge-zero-stickers', async (req, res) => {
+  try {
+    const { rows: users } = await pool.query(
+      `SELECT u.id, u.name
+       FROM users u
+       LEFT JOIN user_duplicates ud ON ud.user_id = u.id
+       LEFT JOIN user_needs un ON un.user_id = u.id
+       WHERE ud.sticker_id IS NULL AND un.sticker_id IS NULL
+         AND u.email_verified = TRUE
+         AND u.is_suspended = FALSE
+         AND (u.last_nudge_at IS NULL OR u.last_nudge_at < NOW() - INTERVAL '7 days')
+       GROUP BY u.id, u.name`
+    );
+
+    const { sendPushNotification } = require('./push');
+    let sent = 0;
+    for (const user of users) {
+      await pool.query(
+        `INSERT INTO notifications (user_id, type, title, body)
+         VALUES ($1, 'nudge', 'Get your stickers listed! 📋', 'Add your spares and what you''re after to start getting matched with other swappers — it only takes a couple of minutes.')`,
+        [user.id]
+      );
+      await pool.query(`UPDATE users SET last_nudge_at = NOW() WHERE id = $1`, [user.id]);
+      sendPushNotification(user.id, {
+        title: '📋 Get your stickers listed!',
+        body: 'Add your spares and needs to start getting matched.',
+      }).catch(() => {});
+      sent++;
+    }
+
+    res.json({ success: true, sent });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Nudge failed' });
+  }
+});
+
+// ----------------------------------------------------------------
 // GET /api/admin/live-locations
 // Users active in the last 30 minutes with geolocation data,
 // for the live map. Returns lat/lng, city, country, name.
