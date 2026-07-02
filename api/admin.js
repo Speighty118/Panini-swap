@@ -440,34 +440,8 @@ router.get('/zero-stickers', async (req, res) => {
 // ----------------------------------------------------------------
 router.post('/nudge-zero-stickers', async (req, res) => {
   try {
-    const { rows: users } = await pool.query(
-      `SELECT u.id, u.name
-       FROM users u
-       LEFT JOIN user_duplicates ud ON ud.user_id = u.id
-       LEFT JOIN user_needs un ON un.user_id = u.id
-       WHERE ud.sticker_id IS NULL AND un.sticker_id IS NULL
-         AND u.email_verified = TRUE
-         AND u.is_suspended = FALSE
-         AND (u.last_nudge_at IS NULL OR u.last_nudge_at < NOW() - INTERVAL '7 days')
-       GROUP BY u.id, u.name`
-    );
-
-    const { sendPushNotification } = require('./push');
-    let sent = 0;
-    for (const user of users) {
-      await pool.query(
-        `INSERT INTO notifications (user_id, type, title, body)
-         VALUES ($1, 'nudge', 'Get your stickers listed! 📋', 'Add your spares and what you''re after to start getting matched with other swappers — it only takes a couple of minutes.')`,
-        [user.id]
-      );
-      await pool.query(`UPDATE users SET last_nudge_at = NOW() WHERE id = $1`, [user.id]);
-      sendPushNotification(user.id, {
-        title: '📋 Get your stickers listed!',
-        body: 'Add your spares and needs to start getting matched.',
-      }).catch(() => {});
-      sent++;
-    }
-
+    const { sendZeroStickerNudge } = require('../jobs/send_zero_sticker_nudge');
+    const sent = await sendZeroStickerNudge();
     res.json({ success: true, sent });
   } catch (err) {
     console.error(err);
@@ -755,32 +729,8 @@ router.get('/health', async (req, res) => {
 // ----------------------------------------------------------------
 router.post('/auto-nudge', async (req, res) => {
   try {
-    const { rows: users } = await pool.query(
-      `SELECT u.id, u.name FROM users u
-       WHERE u.last_login_at < NOW() - INTERVAL '7 days'
-         AND (u.last_nudge_at IS NULL OR u.last_nudge_at < NOW() - INTERVAL '7 days')
-         AND u.email_verified = TRUE
-         AND u.is_suspended = FALSE
-         AND (
-           EXISTS (SELECT 1 FROM user_duplicates WHERE user_id = u.id) OR
-           EXISTS (SELECT 1 FROM user_needs WHERE user_id = u.id)
-         )`
-    );
-
-    let sent = 0;
-    for (const user of users) {
-      await pool.query(
-        `INSERT INTO notifications (user_id, type, title, body)
-         VALUES ($1, 'nudge', 'Any new stickers? 👀', 'It''s been a while! Pop back to check your matches — new swap partners may have joined since your last visit.')`,
-        [user.id]
-      );
-      await pool.query(
-        `UPDATE users SET last_nudge_at = NOW() WHERE id = $1`,
-        [user.id]
-      );
-      sent++;
-    }
-
+    const { sendAutoNudge } = require('../jobs/send_auto_nudge');
+    const sent = await sendAutoNudge();
     res.json({ success: true, sent });
   } catch (err) {
     console.error(err);
