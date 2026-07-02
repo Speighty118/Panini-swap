@@ -801,7 +801,7 @@ router.get('/moderation/cases', async (req, res) => {
     const userIds = candidateRows.map(r => r.id);
     if (!userIds.length) return res.json([]);
 
-    const [usersRes, disputesRes, noShowRes, msgRes, stuckRes, statusRes] = await Promise.all([
+    const [usersRes, disputesRes, noShowRes, msgRes, stuckRes, statusRes, actionsRes] = await Promise.all([
       pool.query(
         `SELECT id, name, email, times_reported, is_suspended, created_at
          FROM users WHERE id = ANY($1::int[])`,
@@ -844,6 +844,10 @@ router.get('/moderation/cases', async (req, res) => {
         [userIds]
       ),
       pool.query(`SELECT * FROM moderation_case_status WHERE user_id = ANY($1::int[])`, [userIds]),
+      pool.query(
+        `SELECT * FROM admin_actions WHERE target_user_id = ANY($1::int[]) ORDER BY created_at DESC`,
+        [userIds]
+      ),
     ]);
 
     const disputesByUser = {};
@@ -854,6 +858,8 @@ router.get('/moderation/cases', async (req, res) => {
     msgRes.rows.forEach(m => { (msgByUser[m.sender_id] = msgByUser[m.sender_id] || []).push(m); });
     const stuckByUser = Object.fromEntries(stuckRes.rows.map(r => [r.id, r]));
     const statusByUser = Object.fromEntries(statusRes.rows.map(r => [r.user_id, r]));
+    const actionsByUser = {};
+    actionsRes.rows.forEach(a => { (actionsByUser[a.target_user_id] = actionsByUser[a.target_user_id] || []).push(a); });
 
     const cases = usersRes.rows.map(u => {
       const disputes = disputesByUser[u.id] || [];
@@ -888,6 +894,14 @@ router.get('/moderation/cases', async (req, res) => {
           ? 'medium'
           : 'low';
 
+      // Unique list of everyone who's reported/disputed this user, so the
+      // dashboard can offer a "message" thread to each of them, not just
+      // the reported user themselves.
+      const reporterMap = {};
+      disputes.forEach(d => { reporterMap[d.raised_by_id] = { id: d.raised_by_id, name: d.raised_by_name }; });
+      noShows.forEach(r => { reporterMap[r.reporter_id] = { id: r.reporter_id, name: r.reporter_name }; });
+      const reporters = Object.values(reporterMap);
+
       return {
         id: u.id,
         name: u.name,
@@ -898,6 +912,8 @@ router.get('/moderation/cases', async (req, res) => {
         disputes,
         no_show_reports: noShows,
         reported_messages: reportedMsgs,
+        reporters,
+        action_history: (actionsByUser[u.id] || []).slice(0, 15),
         stuck_accepted_swaps: parseInt(stuck.stuck_accepted_swaps, 10) || 0,
         open_dispute_count: openDisputes.length,
         section,
@@ -947,13 +963,48 @@ router.post('/moderation/case/:userId/resolve', async (req, res) => {
 });
 
 // ----------------------------------------------------------------
-// POST /api/admin/moderation/warn
-// Body: { userId, message }
-// Sends a warning message to a user (reuses the same admin-support
-// conversation as /messages/send) and logs it as a moderation action.
+// GET /api/admin/moderation/thread/:userId
+// Fetches the admin-support conversation with a specific user, if
+// one exists — used to show reply threads on moderation case cards.
 // ----------------------------------------------------------------
-router.post('/moderation/warn', async (req, res) => {
-  const { userId, message } = req.body;
+router.get('/moderation/thread/:userId', async (req, res) => {
+  const ADMIN_SENDER_ID = 121;
+  try {
+    const { rows: convRows } = await pool.query(
+      `SELECT c.id FROM conversations c
+       JOIN conversation_participants cp1 ON cp1.conversation_id = c.id AND cp1.user_id = $1
+       JOIN conversation_participants cp2 ON cp2.conversation_id = c.id AND cp2.user_id = $2`,
+      [ADMIN_SENDER_ID, req.params.userId]
+    );
+    if (!convRows.length) return res.json({ conversationId: null, messages: [] });
+
+    const conversationId = convRows[0].id;
+    const { rows: messages } = await pool.query(
+      `SELECT dm.id, dm.sender_id, dm.body, dm.created_at, u.name AS sender_name,
+              (dm.sender_id = $2) AS is_admin
+       FROM direct_messages dm
+       JOIN users u ON u.id = dm.sender_id
+       WHERE dm.conversation_id = $1
+       ORDER BY dm.created_at ASC`,
+      [conversationId, ADMIN_SENDER_ID]
+    );
+    res.json({ conversationId, messages });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch message thread' });
+  }
+});
+
+// ----------------------------------------------------------------
+// POST /api/admin/moderation/message
+// Body: { userId, message, isWarning }
+// Sends a message to a user via the admin-support conversation —
+// used both for the one-off "Send warning" action and for ordinary
+// back-and-forth replies on a moderation case. Logs the action so
+// it shows up in that user's case history and the action log.
+// ----------------------------------------------------------------
+router.post('/moderation/message', async (req, res) => {
+  const { userId, message, isWarning } = req.body;
   if (!userId || !message || !message.trim()) {
     return res.status(400).json({ error: 'userId and message are required' });
   }
@@ -988,21 +1039,26 @@ router.post('/moderation/warn', async (req, res) => {
 
     await client.query(
       `INSERT INTO notifications (user_id, type, title, body)
-       VALUES ($1, 'direct_message', '⚠️ A message from Got One Spare? Support', $2)`,
-      [userId, message.trim().substring(0, 100)]
+       VALUES ($1, 'direct_message', $2, $3)`,
+      [
+        userId,
+        isWarning ? '⚠️ A message from Got One Spare? Support' : 'New message from Got One Spare? Support',
+        message.trim().substring(0, 100),
+      ]
     ).catch(() => {});
 
     await client.query(
-      `INSERT INTO admin_actions (action_type, target_user_id, note) VALUES ('warn', $1, $2)`,
-      [userId, message.trim()]
+      `INSERT INTO admin_actions (action_type, target_user_id, note) VALUES ($1, $2, $3)`,
+      [isWarning ? 'warn' : 'message', userId, message.trim()]
     );
 
     await client.query('COMMIT');
 
     const { sendPushNotification } = require('./push');
     sendPushNotification(userId, {
-      title: '⚠️ Message from Got One Spare?',
+      title: isWarning ? '⚠️ Message from Got One Spare?' : '💬 New message from Got One Spare?',
       body: message.trim().slice(0, 80),
+
     }).catch(() => {});
 
     res.json({ success: true, conversationId });
