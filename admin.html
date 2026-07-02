@@ -472,8 +472,13 @@
 
 <div id="panel-ambassador" class="panel" style="padding:0">
   <div class="content" style="padding-top:0">
-    <div class="section-title" style="padding-top:16px">Ambassador requests</div>
-    <div class="card" id="ambassadorList">
+    <div class="section-title" style="padding-top:16px">Pending requests <span id="ambassadorPendingCount" style="font-weight:400;color:#6B7280"></span></div>
+    <div class="card" id="ambassadorList" style="margin-bottom:16px">
+      <div class="empty">Loading...</div>
+    </div>
+
+    <div class="section-title">Already awarded <span id="ambassadorAwardedCount" style="font-weight:400;color:#6B7280"></span></div>
+    <div class="card" id="ambassadorAwardedList">
       <div class="empty">Loading...</div>
     </div>
   </div>
@@ -1961,6 +1966,7 @@ async function loadAmbassador() {
   const el = document.getElementById('ambassadorList');
   try {
     const rows = await adminFetch('/ambassador/admin/pending');
+    document.getElementById('ambassadorPendingCount').textContent = `(${rows.length})`;
     if (!rows.length) { el.innerHTML = '<div class="empty">No pending ambassador requests.</div>'; return; }
     el.innerHTML = rows.map(r => `
       <div class="feedback-item" id="amb-${r.id}">
@@ -1982,6 +1988,34 @@ async function loadAmbassador() {
   } catch(err) {
     el.innerHTML = `<div class="empty">Error: ${err.message}</div>`;
   }
+  loadAmbassadorAwarded();
+}
+
+async function loadAmbassadorAwarded() {
+  const el = document.getElementById('ambassadorAwardedList');
+  try {
+    const rows = await adminFetch('/ambassador/admin/awarded');
+    document.getElementById('ambassadorAwardedCount').textContent = `(${rows.length})`;
+    if (!rows.length) { el.innerHTML = '<div class="empty">No one has been awarded the badge yet.</div>'; return; }
+    el.innerHTML = `<div class="table-wrap"><table>
+      <thead><tr><th>Name</th><th>Email</th><th>Awarded</th><th></th></tr></thead>
+      <tbody>${rows.map(r => `<tr id="amb-awarded-${r.id}">
+        <td><strong>🏅 ${e(r.name)}</strong></td>
+        <td style="font-size:12px;color:#6B7280">${e(r.email)}</td>
+        <td style="font-size:12px;color:#6B7280">${r.ambassador_badge_earned_at ? new Date(r.ambassador_badge_earned_at).toLocaleDateString('en-GB') : '—'}</td>
+        <td><button class="btn-small btn-danger" onclick="revokeAmbassador(${r.id}, '${e(r.name).replace(/'/g,"\\'")}')">Revoke</button></td>
+      </tr>`).join('')}</tbody></table></div>`;
+  } catch(err) {
+    el.innerHTML = `<div class="empty">Error: ${err.message}</div>`;
+  }
+}
+
+async function revokeAmbassador(userId, name) {
+  if (!confirm(`Revoke the Ambassador badge from ${name}? They'll be able to resubmit in future if you change your mind.`)) return;
+  try {
+    await adminFetch(`/ambassador/admin/${userId}/revoke`, { method: 'POST' });
+    loadAmbassadorAwarded();
+  } catch(err) { alert(err.message); }
 }
 
 async function approveAmbassador(id) {
@@ -1990,6 +2024,7 @@ async function approveAmbassador(id) {
     document.getElementById(`amb-${id}`).style.opacity = '0.4';
     document.getElementById(`amb-${id}`).querySelectorAll('button').forEach(b => b.disabled = true);
     document.getElementById(`amb-${id}`).querySelector('.btn-primary').textContent = '✅ Approved';
+    loadAmbassadorAwarded();
   } catch(err) { alert(err.message); }
 }
 
