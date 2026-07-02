@@ -1291,6 +1291,25 @@ function severityBadge(sev) {
   return `<span class="badge ${cls}">${label}</span>`;
 }
 
+function actionIcon(type) {
+  if (type === 'warn') return '⚠️';
+  if (type === 'message') return '💬';
+  if (type === 'suspend') return '🚫';
+  if (type === 'unsuspend') return '✅';
+  if (type.startsWith('dispute_')) return '⚖️';
+  if (type === 'resolve_case') return '✅';
+  if (type === 'reopen_case') return '🔁';
+  return '•';
+}
+
+function renderThreadBlock(userId, label) {
+  return `
+    <div style="margin-top:6px;border:1px solid #f0f0f0;border-radius:8px;overflow:hidden">
+      <button class="btn-small btn-secondary" style="width:100%;text-align:left;border:none;border-radius:0" onclick="toggleThread(${userId})">💬 Message ${e(label)}</button>
+      <div id="thread-${userId}" style="display:none;padding:10px 12px;background:#FAFAFA"></div>
+    </div>`;
+}
+
 function renderCaseCard(c) {
   const disputesHtml = c.disputes.map(d => `
     <div style="padding:8px 0;border-top:1px solid #f0f0f0">
@@ -1322,6 +1341,24 @@ function renderCaseCard(c) {
   const nothingElse = !disputesHtml && !noShowsHtml && !msgsHtml
     ? '<div style="font-size:12px;color:#9CA3AF;padding-top:8px">No open items — flagged from account history.</div>' : '';
 
+  const historyHtml = c.action_history.length ? `
+    <div style="margin-top:10px;padding-top:8px;border-top:1px dashed #E5E7EB">
+      <div style="font-size:11px;font-weight:700;color:#6B7280;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Moderation history</div>
+      ${c.action_history.map(a => `
+        <div style="font-size:11px;color:#6B7280;margin-bottom:3px">
+          ${actionIcon(a.action_type)} <strong>${e(a.action_type.replace(/_/g,' '))}</strong>
+          ${a.note ? ` — "${e(a.note.length>90?a.note.slice(0,90)+'…':a.note)}"` : ''}
+          <span style="color:#9CA3AF">· ${new Date(a.created_at).toLocaleDateString()}</span>
+        </div>`).join('')}
+    </div>` : '';
+
+  const peopleHtml = `
+    <div style="margin-top:10px">
+      <div style="font-size:11px;font-weight:700;color:#6B7280;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Get more information</div>
+      ${renderThreadBlock(c.id, c.name + ' (reported)')}
+      ${c.reporters.map(r => renderThreadBlock(r.id, r.name + ' (reported this)')).join('')}
+    </div>`;
+
   return `<details style="border-top:1px solid #f0f0f0">
     <summary style="padding:12px 14px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
       <span style="font-size:13px"><strong>${e(c.name)}</strong> <span style="color:#6B7280;font-size:11px">${e(c.email)}</span></span>
@@ -1333,6 +1370,8 @@ function renderCaseCard(c) {
     </summary>
     <div style="padding:0 14px 14px">
       ${disputesHtml}${noShowsHtml}${msgsHtml}${nothingElse}
+      ${historyHtml}
+      ${peopleHtml}
       <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap">
         <button class="btn-small ${c.is_suspended?'btn-secondary':'btn-danger'}" onclick="toggleSuspend(${c.id}, ${!c.is_suspended})">${c.is_suspended?'Unsuspend':'Suspend'}</button>
         <button class="btn-small btn-secondary" onclick="promptWarn(${c.id}, '${e(c.name).replace(/'/g,"\\'")}')">Send warning</button>
@@ -1344,17 +1383,73 @@ function renderCaseCard(c) {
   </details>`;
 }
 
-async function setCaseStatus(userId, resolved) {
+async function toggleThread(userId) {
+  const el = document.getElementById(`thread-${userId}`);
+  if (!el) return;
+  const opening = el.style.display === 'none' || !el.style.display;
+  if (!opening) { el.style.display = 'none'; return; }
+  el.style.display = 'block';
+  await loadThread(userId);
+}
+
+async function loadThread(userId) {
+  const el = document.getElementById(`thread-${userId}`);
+  if (!el) return;
+  el.innerHTML = '<div style="font-size:12px;color:#9CA3AF">Loading…</div>';
   try {
-    await adminFetch(`/admin/moderation/case/${userId}/resolve`, { method:'POST', body: JSON.stringify({ resolved }) });
+    const { messages } = await adminFetch(`/admin/moderation/thread/${userId}`);
+    const bubbles = messages.length
+      ? messages.map(m => `
+        <div style="margin-bottom:6px;text-align:${m.is_admin?'right':'left'}">
+          <div style="display:inline-block;max-width:80%;padding:6px 10px;border-radius:10px;font-size:12px;background:${m.is_admin?'#1AAB8A':'#F3F4F6'};color:${m.is_admin?'white':'#0B1120'}">
+            ${e(m.body)}
+          </div>
+          <div style="font-size:10px;color:#9CA3AF;margin-top:2px">${e(m.sender_name)} · ${new Date(m.created_at).toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}</div>
+        </div>`).join('')
+      : '<div style="font-size:12px;color:#9CA3AF">No messages yet — say hello below.</div>';
+    el.innerHTML = `
+      <div style="max-height:220px;overflow-y:auto;margin-bottom:8px">${bubbles}</div>
+      <div style="display:flex;gap:6px">
+        <input type="text" id="thread-input-${userId}" placeholder="Type a message…" style="flex:1;padding:8px 10px;border-radius:6px;border:1px solid #E5E7EB;font-size:12px" onkeydown="if(event.key==='Enter'){sendThreadMessage(${userId})}">
+        <button class="btn-small btn-primary" onclick="sendThreadMessage(${userId})">Send</button>
+      </div>`;
+  } catch(err) {
+    el.innerHTML = `<div class="empty">Error: ${e(err.message)}</div>`;
+  }
+}
+
+async function sendThreadMessage(userId) {
+  const input = document.getElementById(`thread-input-${userId}`);
+  if (!input) return;
+  const message = input.value.trim();
+  if (!message) return;
+  input.disabled = true;
+  try {
+    await adminFetch('/admin/moderation/message', { method:'POST', body: JSON.stringify({ userId, message, isWarning: false }) });
+    await loadThread(userId);
+  } catch(err) {
+    alert(err.message);
+  } finally {
+    input.disabled = false;
+  }
+}
+
+async function setCaseStatus(userId, resolved) {
+  let note = null;
+  if (resolved) {
+    note = prompt('Optional note for this resolution (e.g. what you decided and why):') || null;
+  }
+  try {
+    await adminFetch(`/admin/moderation/case/${userId}/resolve`, { method:'POST', body: JSON.stringify({ resolved, note }) });
     loadModerationCases();
+    loadActionLog();
   } catch(err) { alert(err.message); }
 }
 
 function promptWarn(userId, name) {
   const message = prompt(`Warning message to ${name}:`);
   if (!message || !message.trim()) return;
-  adminFetch('/admin/moderation/warn', { method:'POST', body: JSON.stringify({ userId, message }) })
+  adminFetch('/admin/moderation/message', { method:'POST', body: JSON.stringify({ userId, message, isWarning: true }) })
     .then(() => { alert('Warning sent.'); loadModerationCases(); loadActionLog(); })
     .catch(err => alert(err.message));
 }
