@@ -312,6 +312,42 @@ app.all('/api/internal/run-receipt-reminders', async (req, res) => {
   }
 });
 
+// ---- Internal: trigger the inactive-user nudge job ----
+// Set up a new cron job hitting this URL once a day. Nudges anyone
+// who has stickers listed but hasn't logged in for 7+ days.
+app.all('/api/internal/run-auto-nudge', async (req, res) => {
+  const providedSecret = req.query.secret;
+  if (!process.env.CRON_SECRET || providedSecret !== process.env.CRON_SECRET) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  try {
+    const { sendAutoNudge } = require('./jobs/send_auto_nudge');
+    const sent = await sendAutoNudge();
+    res.json({ success: true, sent, ranAt: new Date().toISOString() });
+  } catch (err) {
+    console.error('Auto-nudge job failed:', err.message);
+    res.status(500).json({ error: 'Auto-nudge job failed' });
+  }
+});
+
+// ---- Internal: trigger the zero-stickers nudge job ----
+// Set up a new cron job hitting this URL once a day. Nudges anyone
+// who's signed up but never listed a duplicate or a need.
+app.all('/api/internal/run-zero-sticker-nudge', async (req, res) => {
+  const providedSecret = req.query.secret;
+  if (!process.env.CRON_SECRET || providedSecret !== process.env.CRON_SECRET) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  try {
+    const { sendZeroStickerNudge } = require('./jobs/send_zero_sticker_nudge');
+    const sent = await sendZeroStickerNudge();
+    res.json({ success: true, sent, ranAt: new Date().toISOString() });
+  } catch (err) {
+    console.error('Zero-sticker nudge job failed:', err.message);
+    res.status(500).json({ error: 'Zero-sticker nudge job failed' });
+  }
+});
+
 // ---- 404 ----
 app.use((req, res) => {
   res.status(404).json({ error: 'Not found' });
