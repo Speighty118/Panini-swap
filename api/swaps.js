@@ -50,12 +50,31 @@ router.get('/preview/:matchId', async (req, res) => {
     const bToA = allItems.filter(i => i.from_user_id === match.user_b_id);
     const equalCount = Math.min(aToB.length, bToA.length);
 
+    // Flag any sticker that either person has already committed in a
+    // different swap that's still in progress — purely informational,
+    // doesn't affect matching or availability at all.
+    const { rows: committed } = await pool.query(
+      `SELECT si.from_user_id, si.sticker_id, si.swap_id
+       FROM swap_items si
+       JOIN swaps s ON s.id = si.swap_id
+       WHERE s.status IN ('proposed', 'accepted', 'posted')
+         AND si.from_user_id IN ($1, $2)`,
+      [match.user_a_id, match.user_b_id]
+    );
+    const committedMap = new Map();
+    committed.forEach(c => committedMap.set(`${c.from_user_id}-${c.sticker_id}`, c.swap_id));
+    const annotate = (item) => ({
+      ...item,
+      also_in_progress: committedMap.has(`${item.from_user_id}-${item.sticker_id}`),
+      other_swap_id: committedMap.get(`${item.from_user_id}-${item.sticker_id}`) || null,
+    });
+
     res.json({
       matchId: match.id,
       userAId: match.user_a_id,
       userBId: match.user_b_id,
-      aGivesB: aToB.slice(0, equalCount),
-      bGivesA: bToA.slice(0, equalCount),
+      aGivesB: aToB.slice(0, equalCount).map(annotate),
+      bGivesA: bToA.slice(0, equalCount).map(annotate),
       count: equalCount,
       predictedCount: equalCount,
     });
@@ -288,13 +307,32 @@ router.get('/:id', async (req, res) => {
       return res.status(403).json({ error: 'Not your swap' });
     }
 
-    const { rows: items } = await pool.query(
+    const { rows: rawItems } = await pool.query(
       `SELECT si.*, s.sticker_number, s.description, s.team_name
        FROM swap_items si
        JOIN stickers s ON s.id = si.sticker_id
        WHERE si.swap_id = $1`,
       [swapId]
     );
+
+    // Flag any sticker either person has separately committed in a
+    // different swap that's still in progress — informational only.
+    const { rows: committed } = await pool.query(
+      `SELECT si.from_user_id, si.sticker_id, si.swap_id
+       FROM swap_items si
+       JOIN swaps s ON s.id = si.swap_id
+       WHERE s.status IN ('proposed', 'accepted', 'posted')
+         AND si.swap_id != $1
+         AND si.from_user_id IN ($2, $3)`,
+      [swapId, swap.user_a_id, swap.user_b_id]
+    );
+    const committedMap = new Map();
+    committed.forEach(c => committedMap.set(`${c.from_user_id}-${c.sticker_id}`, c.swap_id));
+    const items = rawItems.map(item => ({
+      ...item,
+      also_in_progress: committedMap.has(`${item.from_user_id}-${item.sticker_id}`),
+      other_swap_id: committedMap.get(`${item.from_user_id}-${item.sticker_id}`) || null,
+    }));
 
     const bothAccepted = swap.user_a_accepted && swap.user_b_accepted;
     let addresses = null;
