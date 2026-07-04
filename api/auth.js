@@ -410,6 +410,7 @@ router.put('/me', requireAuth, async (req, res) => {
     name, address_line1, address_line2, city, postcode, country, profile_photo,
     email_swap_proposed, email_swap_accepted, email_swap_posted,
     email_swap_received, email_swap_reminders, email_chat_messages,
+    matching_paused,
   } = req.body;
 
   const MAX_PHOTO_LENGTH = 700_000;
@@ -435,7 +436,8 @@ router.put('/me', requireAuth, async (req, res) => {
            email_swap_posted = CASE WHEN $10::boolean IS NOT NULL THEN $10 ELSE email_swap_posted END,
            email_swap_received = CASE WHEN $11::boolean IS NOT NULL THEN $11 ELSE email_swap_received END,
            email_swap_reminders = CASE WHEN $12::boolean IS NOT NULL THEN $12 ELSE email_swap_reminders END,
-           email_chat_messages = CASE WHEN $13::boolean IS NOT NULL THEN $13 ELSE email_chat_messages END
+           email_chat_messages = CASE WHEN $13::boolean IS NOT NULL THEN $13 ELSE email_chat_messages END,
+           matching_paused = CASE WHEN $15::boolean IS NOT NULL THEN $15 ELSE matching_paused END
        WHERE id = $14
        RETURNING *`,
       [
@@ -447,6 +449,7 @@ router.put('/me', requireAuth, async (req, res) => {
         email_swap_reminders ?? null,
         email_chat_messages ?? null,
         req.user.id,
+        matching_paused ?? null,
       ]
     );
     res.json(publicUser(rows[0]));
