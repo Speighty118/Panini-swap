@@ -102,9 +102,98 @@ router.get('/preview/:matchId', async (req, res) => {
 });
 
 // ----------------------------------------------------------------
-// GET /api/swaps/matches
-// List this user's pending match candidates (not yet a swap).
+// GET /api/swaps/stats/:userId
+// Reliability profile + swap statistics for a user — powers both
+// the "reliability profile" shown on someone's ratings modal and
+// the fuller "your stats" dashboard on your own profile. Built to
+// be easy to extend with more fields later.
 // ----------------------------------------------------------------
+router.get('/stats/:userId', async (req, res) => {
+  const userId = parseInt(req.params.userId, 10);
+  if (!Number.isInteger(userId)) return res.status(400).json({ error: 'Invalid user id' });
+
+  try {
+    const { rows: userRows } = await pool.query(
+      `SELECT id, name, rating_avg, rating_count, swap_streak, created_at FROM users WHERE id = $1`,
+      [userId]
+    );
+    const user = userRows[0];
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const { rows: swapRows } = await pool.query(
+      `SELECT id, status, user_a_id, user_b_id, created_at, updated_at,
+              user_a_accepted_at, user_b_accepted_at, user_a_posted_at, user_b_posted_at
+       FROM swaps
+       WHERE user_a_id = $1 OR user_b_id = $1`,
+      [userId]
+    );
+
+    let completed = 0, committed = 0, active = 0;
+    const responseDurationsMs = [];
+    const dispatchDurationsMs = [];
+    const completedDurationsMs = [];
+
+    for (const s of swapRows) {
+      const isUserA = s.user_a_id === userId;
+      const myAcceptedAt = isUserA ? s.user_a_accepted_at : s.user_b_accepted_at;
+      const myPostedAt = isUserA ? s.user_a_posted_at : s.user_b_posted_at;
+      const wasCommitted = ['accepted', 'posted', 'completed'].includes(s.status);
+
+      if (wasCommitted) committed++;
+      if (['proposed', 'accepted', 'posted'].includes(s.status)) active++;
+      if (s.status === 'completed') {
+        completed++;
+        completedDurationsMs.push(new Date(s.updated_at) - new Date(s.created_at));
+      }
+      if (myAcceptedAt) {
+        responseDurationsMs.push(new Date(myAcceptedAt) - new Date(s.created_at));
+      }
+      if (myAcceptedAt && myPostedAt) {
+        dispatchDurationsMs.push(new Date(myPostedAt) - new Date(myAcceptedAt));
+      }
+    }
+
+    const avgMs = (arr) => (arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null);
+    const round1 = (n) => (n == null ? null : Math.round(n * 10) / 10);
+    const msToHours = (ms) => (ms == null ? null : round1(ms / 3_600_000));
+    const msToDays = (ms) => (ms == null ? null : round1(ms / 86_400_000));
+
+    const { rows: exchRows } = await pool.query(
+      `SELECT COUNT(*) FROM swap_items si
+       JOIN swaps s ON s.id = si.swap_id
+       WHERE s.status = 'completed' AND (si.from_user_id = $1 OR si.to_user_id = $1)`,
+      [userId]
+    );
+
+    const { rows: needsRows } = await pool.query(
+      `SELECT COUNT(*) FROM user_needs WHERE user_id = $1`,
+      [userId]
+    );
+
+    res.json({
+      userId: user.id,
+      name: user.name,
+      ratingAvg: user.rating_avg,
+      ratingCount: user.rating_count,
+      memberSince: user.created_at,
+      completedSwaps: completed,
+      activeSwaps: active,
+      successRatePct: committed > 0 ? round1((completed / committed) * 100) : null,
+      stickersExchanged: parseInt(exchRows[0].count, 10),
+      avgResponseHours: msToHours(avgMs(responseDurationsMs)),
+      avgDispatchDays: msToDays(avgMs(dispatchDurationsMs)),
+      fastestCompletedDays: completedDurationsMs.length ? msToDays(Math.min(...completedDurationsMs)) : null,
+      longestCompletedDays: completedDurationsMs.length ? msToDays(Math.max(...completedDurationsMs)) : null,
+      currentStreak: user.swap_streak || 0,
+      needsRemaining: parseInt(needsRows[0].count, 10),
+    });
+  } catch (err) {
+    console.error('Stats error:', err.message);
+    res.status(500).json({ error: 'Failed to load stats' });
+  }
+});
+
+
 router.get('/matches', async (req, res) => {
   const userId = req.user.id;
   try {
@@ -113,8 +202,11 @@ router.get('/matches', async (req, res) => {
               u.id AS other_user_id, u.name AS other_user_name, u.rating_avg, u.rating_count, u.ambassador_badge
        FROM matches m
        JOIN users u ON u.id = CASE WHEN m.user_a_id = $1 THEN m.user_b_id ELSE m.user_a_id END
+       JOIN users me ON me.id = $1
        WHERE (m.user_a_id = $1 OR m.user_b_id = $1)
          AND m.status = 'pending'
+         AND me.matching_paused = FALSE
+         AND u.matching_paused = FALSE
        ORDER BY m.computed_at DESC`,
       [userId]
     );
@@ -462,7 +554,7 @@ router.post('/:id/accept', async (req, res) => {
 
     // Mark this user's side as accepted
     await client.query(
-      `UPDATE swaps SET ${field} = TRUE, updated_at = NOW() WHERE id = $1`,
+      `UPDATE swaps SET ${field} = TRUE, ${field}_at = NOW(), updated_at = NOW() WHERE id = $1`,
       [swapId]
     );
 
@@ -780,12 +872,12 @@ router.post('/:id/posted', async (req, res) => {
     // Store photo on the swap and mark this user's side as posted
     if (photo) {
       await pool.query(
-        `UPDATE swaps SET ${field} = TRUE, postage_photo = $1, updated_at = NOW() WHERE id = $2`,
+        `UPDATE swaps SET ${field} = TRUE, ${field}_at = NOW(), postage_photo = $1, updated_at = NOW() WHERE id = $2`,
         [photo, swapId]
       );
     } else {
       await pool.query(
-        `UPDATE swaps SET ${field} = TRUE, updated_at = NOW() WHERE id = $1`,
+        `UPDATE swaps SET ${field} = TRUE, ${field}_at = NOW(), updated_at = NOW() WHERE id = $1`,
         [swapId]
       );
     }
