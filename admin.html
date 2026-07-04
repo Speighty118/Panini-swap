@@ -190,6 +190,16 @@
 
     <div class="card" style="margin-bottom:16px">
       <div class="card-header">
+        <h2>⏳ Expire stale proposals</h2>
+        <button class="btn-small btn-primary" onclick="runExpireProposals()" id="expireProposalsBtn">Run now</button>
+      </div>
+      <p style="padding:10px 18px;font-size:13px;color:#6B7280;margin:0" id="expireProposalsResult">
+        Auto-declines any swap still waiting to be accepted after 7 days — frees up the person who already accepted, and a fresh match will appear for both sides. No effect on anyone's reputation or report count.
+      </p>
+    </div>
+
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-header">
         <h2>📮 Posting reminders</h2>
         <button class="btn-small btn-primary" onclick="runPostingReminders()" id="postingReminderBtn">Run now</button>
       </div>
@@ -1281,6 +1291,19 @@ async function autoNudge() {
     document.getElementById('nudgeResult').textContent = `✓ Done — sent nudge to ${sent} inactive user${sent !== 1 ? 's' : ''}.`;
   } catch(err) {
     document.getElementById('nudgeResult').textContent = `Error: ${err.message}`;
+  }
+  btn.disabled = false; btn.textContent = 'Run now';
+}
+
+async function runExpireProposals() {
+  const btn = document.getElementById('expireProposalsBtn');
+  const resultEl = document.getElementById('expireProposalsResult');
+  btn.disabled = true; btn.textContent = 'Running…';
+  try {
+    await adminFetch('/admin/run-expire-proposals', { method: 'POST' });
+    resultEl.textContent = `✓ Done — check "Longest pending swaps" to see the list shrink.`;
+  } catch(err) {
+    resultEl.textContent = `Error: ${err.message}`;
   }
   btn.disabled = false; btn.textContent = 'Run now';
 }
