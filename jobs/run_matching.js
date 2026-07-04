@@ -39,9 +39,23 @@ async function runMatchingJob() {
 
     console.log(`Found ${currentMatches.length} candidate pairs.`);
 
+    // Feature: pause matching. Deliberately filtered here in JS rather
+    // than inside find_matches() itself — keeps the matching SQL
+    // function untouched and this easy to remove/adjust later.
+    const { rows: pausedRows } = await client.query(
+      `SELECT id FROM users WHERE matching_paused = TRUE`
+    );
+    const pausedIds = new Set(pausedRows.map(r => r.id));
+    const activeMatches = currentMatches.filter(
+      m => !pausedIds.has(m.user_a) && !pausedIds.has(m.user_b)
+    );
+    if (pausedIds.size > 0) {
+      console.log(`Skipping ${currentMatches.length - activeMatches.length} pair(s) involving ${pausedIds.size} paused user(s).`);
+    }
+
     const seenPairs = new Set();
 
-    for (const m of currentMatches) {
+    for (const m of activeMatches) {
       const key = `${m.user_a}-${m.user_b}`;
       seenPairs.add(key);
 
