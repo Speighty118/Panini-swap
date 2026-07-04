@@ -293,6 +293,24 @@ app.all('/api/internal/run-reminders', async (req, res) => {
   }
 });
 
+// ---- Internal: trigger the proposal expiry job ----
+// Set up a new cron job hitting this URL once a day. Auto-declines
+// any swap still 'proposed' 7+ days after being created.
+app.all('/api/internal/run-proposal-expiry', async (req, res) => {
+  const providedSecret = req.query.secret;
+  if (!process.env.CRON_SECRET || providedSecret !== process.env.CRON_SECRET) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  try {
+    const { expireStaleProposals } = require('./jobs/expire_stale_proposals');
+    await expireStaleProposals();
+    res.json({ success: true, ranAt: new Date().toISOString() });
+  } catch (err) {
+    console.error('Proposal expiry job failed:', err.message);
+    res.status(500).json({ error: 'Proposal expiry job failed' });
+  }
+});
+
 // ---- Internal: trigger the "post your stickers" reminder job ----
 // Set up a new cron job hitting this URL every few hours. Nudges
 // anyone who accepted a swap 48+ hours ago but hasn't posted yet.
@@ -327,6 +345,24 @@ app.all('/api/internal/run-receipt-reminders', async (req, res) => {
   } catch (err) {
     console.error('Receipt reminder job failed:', err.message);
     res.status(500).json({ error: 'Receipt reminder job failed' });
+  }
+});
+
+// ---- Internal: trigger the stale-proposal expiry job ----
+// Set up a new cron job hitting this URL once a day. Auto-declines
+// any swap still at 'proposed' after 7 days with no response.
+app.all('/api/internal/run-expire-proposals', async (req, res) => {
+  const providedSecret = req.query.secret;
+  if (!process.env.CRON_SECRET || providedSecret !== process.env.CRON_SECRET) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  try {
+    const { expireStaleProposals } = require('./jobs/expire_stale_proposals');
+    await expireStaleProposals();
+    res.json({ success: true, ranAt: new Date().toISOString() });
+  } catch (err) {
+    console.error('Expire proposals job failed:', err.message);
+    res.status(500).json({ error: 'Expire proposals job failed' });
   }
 });
 
