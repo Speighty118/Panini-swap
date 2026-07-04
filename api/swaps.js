@@ -668,7 +668,7 @@ router.post('/:id/sticker-photo', async (req, res) => {
   const { photo } = req.body;
 
   if (!photo) return res.status(400).json({ error: 'Photo is required' });
-  if (photo.length > 700000) return res.status(400).json({ error: 'Photo too large — please use a smaller image' });
+  if (photo.length > 7_000_000) return res.status(400).json({ error: 'Photo too large — please use a smaller image' });
 
   try {
     const { rows } = await pool.query(`SELECT * FROM swaps WHERE id = $1`, [swapId]);
@@ -734,7 +734,7 @@ router.post('/:id/posted', async (req, res) => {
     if (swap.user_a_id !== userId && swap.user_b_id !== userId) {
       return res.status(403).json({ error: 'Not your swap' });
     }
-    if (swap.status !== 'accepted') {
+    if (!['accepted', 'posted'].includes(swap.status)) {
       return res.status(400).json({ error: 'Swap must be accepted before posting' });
     }
 
