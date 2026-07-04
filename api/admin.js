@@ -769,6 +769,36 @@ router.post('/auto-nudge', async (req, res) => {
 });
 
 // ----------------------------------------------------------------
+// POST /api/admin/run-proposal-expiry
+// Manual trigger for the proposal expiry job.
+// ----------------------------------------------------------------
+router.post('/run-proposal-expiry', async (req, res) => {
+  try {
+    const { expireStaleProposals } = require('../jobs/expire_stale_proposals');
+    await expireStaleProposals();
+    res.json({ success: true, ranAt: new Date().toISOString() });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Proposal expiry job failed' });
+  }
+});
+
+// ----------------------------------------------------------------
+// POST /api/admin/run-expire-proposals
+// Manual trigger for the stale-proposal expiry job.
+// ----------------------------------------------------------------
+router.post('/run-expire-proposals', async (req, res) => {
+  try {
+    const { expireStaleProposals } = require('../jobs/expire_stale_proposals');
+    await expireStaleProposals();
+    res.json({ success: true, ranAt: new Date().toISOString() });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Expire proposals job failed' });
+  }
+});
+
+// ----------------------------------------------------------------
 // POST /api/admin/run-posting-reminders
 // Manual trigger for the "post your stickers" reminder job.
 // ----------------------------------------------------------------
