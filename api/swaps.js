@@ -63,10 +63,27 @@ router.get('/preview/:matchId', async (req, res) => {
     );
     const committedMap = new Map();
     committed.forEach(c => committedMap.set(`${c.from_user_id}-${c.sticker_id}`, c.swap_id));
+
+    // Separately flag any sticker either person is already due to
+    // RECEIVE from a different in-progress swap — not a risk like the
+    // above, just a heads-up that this need may already be covered.
+    const { rows: incoming } = await pool.query(
+      `SELECT si.to_user_id, si.sticker_id, si.swap_id
+       FROM swap_items si
+       JOIN swaps s ON s.id = si.swap_id
+       WHERE s.status IN ('proposed', 'accepted', 'posted')
+         AND si.to_user_id IN ($1, $2)`,
+      [match.user_a_id, match.user_b_id]
+    );
+    const incomingMap = new Map();
+    incoming.forEach(c => incomingMap.set(`${c.to_user_id}-${c.sticker_id}`, c.swap_id));
+
     const annotate = (item) => ({
       ...item,
       also_in_progress: committedMap.has(`${item.from_user_id}-${item.sticker_id}`),
       other_swap_id: committedMap.get(`${item.from_user_id}-${item.sticker_id}`) || null,
+      already_receiving: incomingMap.has(`${item.to_user_id}-${item.sticker_id}`),
+      already_receiving_swap_id: incomingMap.get(`${item.to_user_id}-${item.sticker_id}`) || null,
     });
 
     res.json({
@@ -328,10 +345,28 @@ router.get('/:id', async (req, res) => {
     );
     const committedMap = new Map();
     committed.forEach(c => committedMap.set(`${c.from_user_id}-${c.sticker_id}`, c.swap_id));
+
+    // Separately flag any sticker either person is already due to
+    // RECEIVE from a different in-progress swap — a heads-up, not a
+    // risk, since this need may already be covered elsewhere.
+    const { rows: incoming } = await pool.query(
+      `SELECT si.to_user_id, si.sticker_id, si.swap_id
+       FROM swap_items si
+       JOIN swaps s ON s.id = si.swap_id
+       WHERE s.status IN ('proposed', 'accepted', 'posted')
+         AND si.swap_id != $1
+         AND si.to_user_id IN ($2, $3)`,
+      [swapId, swap.user_a_id, swap.user_b_id]
+    );
+    const incomingMap = new Map();
+    incoming.forEach(c => incomingMap.set(`${c.to_user_id}-${c.sticker_id}`, c.swap_id));
+
     const items = rawItems.map(item => ({
       ...item,
       also_in_progress: committedMap.has(`${item.from_user_id}-${item.sticker_id}`),
       other_swap_id: committedMap.get(`${item.from_user_id}-${item.sticker_id}`) || null,
+      already_receiving: incomingMap.has(`${item.to_user_id}-${item.sticker_id}`),
+      already_receiving_swap_id: incomingMap.get(`${item.to_user_id}-${item.sticker_id}`) || null,
     }));
 
     const bothAccepted = swap.user_a_accepted && swap.user_b_accepted;
