@@ -50,19 +50,34 @@ router.get('/preview/:matchId', async (req, res) => {
     const bToA = allItems.filter(i => i.from_user_id === match.user_b_id);
     const equalCount = Math.min(aToB.length, bToA.length);
 
-    // Flag any sticker that either person has already committed in a
-    // different swap that's still in progress — purely informational,
-    // doesn't affect matching or availability at all.
-    const { rows: committed } = await pool.query(
-      `SELECT si.from_user_id, si.sticker_id, si.swap_id
+    // Flag any sticker where this person's remaining stock isn't
+    // enough to cover ALL the other still-open ('proposed') swaps that
+    // also want it from them — a genuine risk, not just "used once
+    // elsewhere". Deliberately quantity-aware: someone with multiple
+    // copies who's used one elsewhere still has spares for others.
+    // Only counts 'proposed' swaps — an 'accepted'/'posted' swap has
+    // already deducted its stock, which the current quantity reflects.
+    const stickerIdsInvolved = [...new Set(allItems.map(i => i.sticker_id))];
+    const { rows: qtyRows } = await pool.query(
+      `SELECT user_id, sticker_id, quantity FROM user_duplicates
+       WHERE user_id IN ($1, $2) AND sticker_id = ANY($3::int[])`,
+      [match.user_a_id, match.user_b_id, stickerIdsInvolved]
+    );
+    const qtyMap = new Map();
+    qtyRows.forEach(r => qtyMap.set(`${r.user_id}-${r.sticker_id}`, r.quantity));
+
+    const { rows: otherProposed } = await pool.query(
+      `SELECT si.from_user_id, si.sticker_id, COUNT(DISTINCT si.swap_id) AS cnt
        FROM swap_items si
        JOIN swaps s ON s.id = si.swap_id
-       WHERE s.status IN ('proposed', 'accepted', 'posted')
-         AND si.from_user_id IN ($1, $2)`,
-      [match.user_a_id, match.user_b_id]
+       WHERE s.status = 'proposed'
+         AND si.from_user_id IN ($1, $2)
+         AND si.sticker_id = ANY($3::int[])
+       GROUP BY si.from_user_id, si.sticker_id`,
+      [match.user_a_id, match.user_b_id, stickerIdsInvolved]
     );
-    const committedMap = new Map();
-    committed.forEach(c => committedMap.set(`${c.from_user_id}-${c.sticker_id}`, c.swap_id));
+    const otherCountMap = new Map();
+    otherProposed.forEach(r => otherCountMap.set(`${r.from_user_id}-${r.sticker_id}`, parseInt(r.cnt, 10)));
 
     // Separately flag any sticker either person is already due to
     // RECEIVE from a different in-progress swap — not a risk like the
@@ -78,13 +93,22 @@ router.get('/preview/:matchId', async (req, res) => {
     const incomingMap = new Map();
     incoming.forEach(c => incomingMap.set(`${c.to_user_id}-${c.sticker_id}`, c.swap_id));
 
-    const annotate = (item) => ({
-      ...item,
-      also_in_progress: committedMap.has(`${item.from_user_id}-${item.sticker_id}`),
-      other_swap_id: committedMap.get(`${item.from_user_id}-${item.sticker_id}`) || null,
-      already_receiving: incomingMap.has(`${item.to_user_id}-${item.sticker_id}`),
-      already_receiving_swap_id: incomingMap.get(`${item.to_user_id}-${item.sticker_id}`) || null,
-    });
+    const annotate = (item) => {
+      const key = `${item.from_user_id}-${item.sticker_id}`;
+      const remaining = qtyMap.get(key) || 0;
+      const otherProposedCount = otherCountMap.get(key) || 0;
+      // Accepting this preview would be one more claim on that stock —
+      // at risk only if remaining stock can't cover this one plus the
+      // other proposals already sitting out there.
+      const atRisk = remaining <= otherProposedCount;
+      return {
+        ...item,
+        also_in_progress: atRisk,
+        other_swap_id: null,
+        already_receiving: incomingMap.has(`${item.to_user_id}-${item.sticker_id}`),
+        already_receiving_swap_id: incomingMap.get(`${item.to_user_id}-${item.sticker_id}`) || null,
+      };
+    };
 
     res.json({
       matchId: match.id,
@@ -427,19 +451,32 @@ router.get('/:id', async (req, res) => {
       [swapId]
     );
 
-    // Flag any sticker either person has separately committed in a
-    // different swap that's still in progress — informational only.
-    const { rows: committed } = await pool.query(
-      `SELECT si.from_user_id, si.sticker_id, si.swap_id
+    // Flag any sticker where this person's remaining stock isn't
+    // enough to cover ALL the other still-open ('proposed') swaps that
+    // also want it from them — quantity-aware, so someone with
+    // multiple copies who's used one elsewhere isn't wrongly flagged.
+    const stickerIdsInvolved = [...new Set(rawItems.map(i => i.sticker_id))];
+    const { rows: qtyRows } = await pool.query(
+      `SELECT user_id, sticker_id, quantity FROM user_duplicates
+       WHERE user_id IN ($1, $2) AND sticker_id = ANY($3::int[])`,
+      [swap.user_a_id, swap.user_b_id, stickerIdsInvolved]
+    );
+    const qtyMap = new Map();
+    qtyRows.forEach(r => qtyMap.set(`${r.user_id}-${r.sticker_id}`, r.quantity));
+
+    const { rows: otherProposed } = await pool.query(
+      `SELECT si.from_user_id, si.sticker_id, COUNT(DISTINCT si.swap_id) AS cnt
        FROM swap_items si
        JOIN swaps s ON s.id = si.swap_id
-       WHERE s.status IN ('proposed', 'accepted', 'posted')
+       WHERE s.status = 'proposed'
          AND si.swap_id != $1
-         AND si.from_user_id IN ($2, $3)`,
-      [swapId, swap.user_a_id, swap.user_b_id]
+         AND si.from_user_id IN ($2, $3)
+         AND si.sticker_id = ANY($4::int[])
+       GROUP BY si.from_user_id, si.sticker_id`,
+      [swapId, swap.user_a_id, swap.user_b_id, stickerIdsInvolved]
     );
-    const committedMap = new Map();
-    committed.forEach(c => committedMap.set(`${c.from_user_id}-${c.sticker_id}`, c.swap_id));
+    const otherCountMap = new Map();
+    otherProposed.forEach(r => otherCountMap.set(`${r.from_user_id}-${r.sticker_id}`, parseInt(r.cnt, 10)));
 
     // Separately flag any sticker either person is already due to
     // RECEIVE from a different in-progress swap — a heads-up, not a
@@ -456,13 +493,23 @@ router.get('/:id', async (req, res) => {
     const incomingMap = new Map();
     incoming.forEach(c => incomingMap.set(`${c.to_user_id}-${c.sticker_id}`, c.swap_id));
 
-    const items = rawItems.map(item => ({
-      ...item,
-      also_in_progress: committedMap.has(`${item.from_user_id}-${item.sticker_id}`),
-      other_swap_id: committedMap.get(`${item.from_user_id}-${item.sticker_id}`) || null,
-      already_receiving: incomingMap.has(`${item.to_user_id}-${item.sticker_id}`),
-      already_receiving_swap_id: incomingMap.get(`${item.to_user_id}-${item.sticker_id}`) || null,
-    }));
+    const items = rawItems.map(item => {
+      const key = `${item.from_user_id}-${item.sticker_id}`;
+      // This swap itself is one more claim on the stock, but only if
+      // it's still 'proposed' — once accepted, its stock was already
+      // deducted, so the current quantity already accounts for it.
+      const thisSwapCounts = swap.status === 'proposed' ? 1 : 0;
+      const remaining = qtyMap.get(key) || 0;
+      const totalClaims = (otherCountMap.get(key) || 0) + thisSwapCounts;
+      const atRisk = remaining < totalClaims;
+      return {
+        ...item,
+        also_in_progress: atRisk,
+        other_swap_id: null,
+        already_receiving: incomingMap.has(`${item.to_user_id}-${item.sticker_id}`),
+        already_receiving_swap_id: incomingMap.get(`${item.to_user_id}-${item.sticker_id}`) || null,
+      };
+    });
 
     const bothAccepted = swap.user_a_accepted && swap.user_b_accepted;
     let addresses = null;
@@ -604,23 +651,45 @@ router.post('/:id/accept', async (req, res) => {
         );
       }
 
-      // Auto-decline any OTHER proposed swaps that contain the same stickers
-      // now that those stickers have been removed from user_duplicates.
-      // This prevents users from seeing "failed to accept" on other swaps.
-      if (committedStickerIds.length > 0) {
-        await client.query(
+      // Auto-decline any OTHER proposed swaps for a sticker this user
+      // has now fully run out of. Crucially, this checks ACTUAL
+      // REMAINING quantity — someone with multiple copies of a sticker
+      // who's used one here should keep their other proposals for it
+      // alive, since they may well have spares left to cover them.
+      for (const item of items) {
+        const { rows: stillHave } = await client.query(
+          `SELECT 1 FROM user_duplicates WHERE user_id = $1 AND sticker_id = $2`,
+          [item.from_user_id, item.sticker_id]
+        );
+        if (stillHave.length) continue; // still has a spare — leave their other proposals alone
+
+        const { rows: killedSwaps } = await client.query(
           `UPDATE swaps SET status = 'declined',
-             decline_reason = 'Automatically declined — some stickers were committed to another swap that completed. A fresh match will be generated shortly.',
+             decline_reason = 'Automatically declined — this sticker was committed to another swap that completed. A fresh match will be generated shortly.',
              updated_at = NOW()
            WHERE status = 'proposed'
              AND id != $1
              AND id IN (
                SELECT DISTINCT swap_id FROM swap_items
-               WHERE sticker_id = ANY($2::integer[])
-                 AND from_user_id IN ($3, $4)
-             )`,
-          [swapId, committedStickerIds, updated.user_a_id, updated.user_b_id]
+               WHERE sticker_id = $2 AND from_user_id = $3
+             )
+           RETURNING id, user_a_id, user_b_id`,
+          [swapId, item.sticker_id, item.from_user_id]
         );
+
+        // Let both parties of any newly-killed swap know, rather than
+        // leaving it to silently vanish from their list.
+        for (const killed of killedSwaps) {
+          for (const affectedUserId of [killed.user_a_id, killed.user_b_id]) {
+            await createNotification(client, {
+              userId: affectedUserId,
+              type: 'swap_declined',
+              title: 'Swap automatically cancelled',
+              body: 'A swap was cancelled because a sticker was committed to another swap that completed first. A fresh match will appear in your Matches tab shortly.',
+              swapId: killed.id,
+            }).catch(() => {});
+          }
+        }
       }
 
       // Award verified postage badge if applicable
@@ -871,11 +940,15 @@ router.post('/:id/posted', async (req, res) => {
     const isUserA = swap.user_a_id === userId;
     const field = isUserA ? 'user_a_posted' : 'user_b_posted';
     const otherPostedField = isUserA ? 'user_b_posted' : 'user_a_posted';
+    const photoField = isUserA ? 'user_a_postage_photo' : 'user_b_postage_photo';
 
-    // Store photo on the swap and mark this user's side as posted
+    // Store photo on THIS person's own slot — previously this used a
+    // single shared column, which meant whoever uploaded second could
+    // never add their own proof once the other person's photo had
+    // already filled it.
     if (photo) {
       await pool.query(
-        `UPDATE swaps SET ${field} = TRUE, ${field}_at = NOW(), postage_photo = $1, updated_at = NOW() WHERE id = $2`,
+        `UPDATE swaps SET ${field} = TRUE, ${field}_at = NOW(), ${photoField} = $1, updated_at = NOW() WHERE id = $2`,
         [photo, swapId]
       );
     } else {
