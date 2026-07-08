@@ -114,7 +114,7 @@ router.get('/stats/:userId', async (req, res) => {
 
   try {
     const { rows: userRows } = await pool.query(
-      `SELECT id, name, rating_avg, rating_count, swap_streak, created_at FROM users WHERE id = $1`,
+      `SELECT id, name, city, profile_photo, ambassador_badge, rating_avg, rating_count, swap_streak, created_at FROM users WHERE id = $1`,
       [userId]
     );
     const user = userRows[0];
@@ -173,6 +173,9 @@ router.get('/stats/:userId', async (req, res) => {
     res.json({
       userId: user.id,
       name: user.name,
+      city: user.city,
+      profilePhoto: user.profile_photo,
+      ambassadorBadge: user.ambassador_badge,
       ratingAvg: user.rating_avg,
       ratingCount: user.rating_count,
       memberSince: user.created_at,
