@@ -42,10 +42,18 @@ async function runMatchingJob() {
     // Feature: pause matching. Deliberately filtered here in JS rather
     // than inside find_matches() itself — keeps the matching SQL
     // function untouched and this easy to remove/adjust later.
-    const { rows: pausedRows } = await client.query(
-      `SELECT id FROM users WHERE matching_paused = TRUE`
-    );
-    const pausedIds = new Set(pausedRows.map(r => r.id));
+    // Wrapped defensively: if this query fails for any reason (e.g. a
+    // migration hasn't run yet), we fall back to treating nobody as
+    // paused rather than crashing the entire matching job.
+    let pausedIds = new Set();
+    try {
+      const { rows: pausedRows } = await client.query(
+        `SELECT id FROM users WHERE COALESCE(matching_paused, FALSE) = TRUE`
+      );
+      pausedIds = new Set(pausedRows.map(r => r.id));
+    } catch (pauseErr) {
+      console.error('Could not check paused users (continuing without pause filter):', pauseErr.message);
+    }
     const activeMatches = currentMatches.filter(
       m => !pausedIds.has(m.user_a) && !pausedIds.has(m.user_b)
     );
