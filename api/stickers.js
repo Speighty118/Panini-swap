@@ -316,4 +316,41 @@ router.post('/me/needs/bulk', requireAuth, async (req, res) => {
   }
 });
 
+// ----------------------------------------------------------------
+// DELETE /api/stickers/me/all
+// Clears all of a user's spares and needs in one go — for anyone
+// whose list has drifted a long way from their actual collection
+// and would rather start fresh than delete things one at a time.
+// Skips any spare currently committed to a swap that's still in
+// progress, so a bulk reset can never break an active swap.
+// ----------------------------------------------------------------
+router.delete('/me/all', requireAuth, async (req, res) => {
+  const userId = req.user.id;
+  try {
+    const { rows: deletedDuplicates } = await pool.query(
+      `DELETE FROM user_duplicates
+       WHERE user_id = $1
+         AND sticker_id NOT IN (
+           SELECT si.sticker_id FROM swap_items si
+           JOIN swaps s ON s.id = si.swap_id
+           WHERE si.from_user_id = $1 AND s.status IN ('proposed', 'accepted', 'posted')
+         )
+       RETURNING sticker_id`,
+      [userId]
+    );
+    const { rows: deletedNeeds } = await pool.query(
+      `DELETE FROM user_needs WHERE user_id = $1 RETURNING sticker_id`,
+      [userId]
+    );
+    res.json({
+      success: true,
+      duplicatesCleared: deletedDuplicates.length,
+      needsCleared: deletedNeeds.length,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to clear your lists' });
+  }
+});
+
 module.exports = router;
