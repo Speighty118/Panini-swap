@@ -444,15 +444,15 @@
     </div>
   </div>
 
-  <!-- DONATIONS -->
+  <!-- FOUNDER CLICKS -->
   <div id="panel-donations" class="panel">
     <div class="card">
       <div class="card-header">
-        <h2>☕ Donation clicks</h2>
+        <h2>🏆 Founder button clicks</h2>
         <span id="donationCount" style="font-size:13px;color:#6B7280"></span>
       </div>
       <p style="padding:10px 18px 0;font-size:13px;color:#6B7280;margin:0">
-        These are people who clicked a donate button. They were redirected to Stripe — check your Stripe dashboard for actual payments.
+        These are people who clicked "Become a Founder". They were redirected to Stripe checkout — check your Stripe dashboard to see who actually completed payment.
       </p>
       <div id="donationsList"></div>
     </div>
@@ -530,7 +530,7 @@
       <button onclick="showTab('moderation')" style="display:flex;align-items:center;gap:12px;width:100%;padding:14px;background:none;border:none;border-bottom:1px solid #f0f0f0;font-family:inherit;font-size:14px;font-weight:600;color:#0B1120;text-align:left;cursor:pointer">🛡 Moderation</button>
       <button onclick="showTab('invites')" style="display:flex;align-items:center;gap:12px;width:100%;padding:14px;background:none;border:none;border-bottom:1px solid #f0f0f0;font-family:inherit;font-size:14px;font-weight:600;color:#0B1120;text-align:left;cursor:pointer">🎟 Invite Codes</button>
       <button onclick="showTab('feedback')" style="display:flex;align-items:center;gap:12px;width:100%;padding:14px;background:none;border:none;border-bottom:1px solid #f0f0f0;font-family:inherit;font-size:14px;font-weight:600;color:#0B1120;text-align:left;cursor:pointer">💬 Feedback</button>
-      <button onclick="showTab('donations')" style="display:flex;align-items:center;gap:12px;width:100%;padding:14px;background:none;border:none;font-family:inherit;font-size:14px;font-weight:600;color:#0B1120;text-align:left;cursor:pointer">💰 Donations</button>
+      <button onclick="showTab('donations')" style="display:flex;align-items:center;gap:12px;width:100%;padding:14px;background:none;border:none;font-family:inherit;font-size:14px;font-weight:600;color:#0B1120;text-align:left;cursor:pointer">🏆 Founder clicks</button>
     </div>
   </div>
 </div>
@@ -865,9 +865,10 @@ async function loadDonations() {
     if (!items.length) { el.innerHTML = '<div class="empty">No donation clicks yet.</div>'; return; }
 
     const LOCATION_LABELS = {
-      swap_confirmed: '🎉 Swap confirmed',
-      dashboard: '📊 Dashboard',
-      footer: '🔗 Footer link',
+      become_a_founder: '🏆 Become a Founder button',
+      swap_confirmed: '🎉 Swap confirmed (old)',
+      dashboard: '📊 Dashboard (old)',
+      footer: '🔗 Footer link (old)',
     };
 
     el.innerHTML = `<div class="table-wrap"><table>
