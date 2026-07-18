@@ -81,7 +81,7 @@ async function sendPasswordResetEmail(toEmail, name, resetUrl) {
   });
 }
 
-module.exports = { sendVerificationEmail, sendDisputeNotification, sendPasswordResetEmail, sendSwapProposedEmail, sendSwapAcceptedEmail, sendSwapPostedEmail, sendSwapReceivedEmail, sendSwapReminderEmail };
+module.exports = { sendVerificationEmail, sendDisputeNotification, sendPasswordResetEmail, sendSwapProposedEmail, sendSwapAcceptedEmail, sendSwapPostedEmail, sendSwapReceivedEmail, sendSwapReminderEmail, sendFounderWelcomeEmail };
 
 const SITE_URL = process.env.FRONTEND_URL || 'https://www.gotonespare.com';
 
@@ -192,6 +192,30 @@ async function sendSwapReminderEmail(toEmail, { recipientName, proposerName, swa
       </div>
       ${ctaButton('Review and respond →', `${SITE_URL}`)}
       <p style="color: #999; font-size: 12px;">Swap reference: #${swapId}</p>
+    `),
+  });
+}
+
+async function sendFounderWelcomeEmail(toEmail, name) {
+  return resend.emails.send({
+    from: FROM_EMAIL,
+    to: toEmail,
+    subject: 'Welcome to the Founders Club 🏆',
+    html: emailWrapper(`
+      <h2 style="color: #92400E; font-size: 20px; margin: 0 0 16px;">🏆 Welcome to the Founders Club!</h2>
+      <p style="color: #444; line-height: 1.6; margin: 0 0 12px;">Hi ${name},</p>
+      <p style="color: #444; line-height: 1.6; margin: 0 0 16px;">Thank you so much for supporting Got One Spare? Because of your support, we can keep the site running and keep building new features and future sticker collections.</p>
+      <div style="background: #FFFBEB; border: 1px solid #FDE68A; border-radius: 4px; padding: 16px 18px; margin: 16px 0;">
+        <div style="font-size: 14px; font-weight: 700; color: #92400E; margin-bottom: 10px;">Your Founder benefits:</div>
+        <ul style="margin: 0; padding-left: 20px; color: #78350F; font-size: 13px; line-height: 1.8;">
+          <li>Founder badge displayed next to your name everywhere</li>
+          <li>Gold profile styling</li>
+          <li>Early access to vote on new features</li>
+          <li>Lifetime recognition as a founding supporter</li>
+        </ul>
+      </div>
+      <p style="color: #444; line-height: 1.6;">Core swapping, matching and messaging will always stay completely free for everyone — your support just helps keep it that way.</p>
+      ${ctaButton('View your profile →', `${SITE_URL}`)}
     `),
   });
 }
