@@ -21,7 +21,7 @@ const { Pool } = require('pg');
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const Stripe = require('stripe');
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
-const { requireAuth } = require('./auth');
+const { requireAuth } = require('./middleware/auth');
 const { sendFounderWelcomeEmail } = require('./email');
 const { createNotification } = require('./notifications');
 
