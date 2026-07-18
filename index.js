@@ -34,6 +34,7 @@ const announcementRoutes = require('./api/announcements');
 const pushRoutes = require('./api/push');
 const messagingRoutes = require('./api/messaging');
 const ambassadorRoutes = require('./api/ambassador');
+const founderRoutes = require('./api/founder');
 const { runMatchingJob } = require('./jobs/run_matching');
 
 const app = express();
@@ -41,6 +42,16 @@ app.set('trust proxy', 1); // Trust Railway's proxy for rate limiting and IP det
 
 // ---- Security & parsing middleware ----
 app.use(helmet());
+
+// Stripe webhook MUST be mounted before express.json() below, using
+// the RAW request body (not JSON-parsed) — Stripe signs the exact raw
+// bytes, so verification fails if the body has already been parsed.
+app.use(
+  '/api/founder/webhook',
+  express.raw({ type: 'application/json' }),
+  require('./api/founder')
+);
+
 app.use(express.json({ limit: '2mb' }));
 // CORS is applied per-path rather than globally, so each request is
 // handled by exactly one CORS configuration with no ordering ambiguity.
@@ -71,7 +82,7 @@ const restrictedCors = cors({
 // Admin-accessible routes (admin.html is a local file with null origin,
 // so these need permissive CORS — all are protected by their own auth).
 const adminCors = cors({ origin: '*' });
-const ADMIN_PATHS = ['/api/admin', '/api/invites', '/api/feedback', '/api/donations', '/api/reports', '/api/announcements', '/api/ambassador/admin'];
+const ADMIN_PATHS = ['/api/admin', '/api/invites', '/api/feedback', '/api/donations', '/api/reports', '/api/announcements', '/api/ambassador/admin', '/api/founder/admin'];
 
 ADMIN_PATHS.forEach(path => app.use(path, adminCors));
 
@@ -142,6 +153,7 @@ app.use('/api/future-collections', futureCollectionsRoutes);
 app.use('/api/push', pushRoutes);
 app.use('/api/messages', messagingRoutes);
 app.use('/api/ambassador', ambassadorRoutes);
+app.use('/api/founder', founderRoutes);
 app.use('/api/admin', adminRoutes);
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
