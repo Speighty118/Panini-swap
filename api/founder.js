@@ -22,7 +22,7 @@ const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const Stripe = require('stripe');
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 const { requireAuth } = require('./auth');
-const { sendFounderWelcomeEmail } = require('../email');
+const { sendFounderWelcomeEmail } = require('./email');
 const { createNotification } = require('./notifications');
 
 const FOUNDER_PRICE_PENCE = 1499; // £14.99
