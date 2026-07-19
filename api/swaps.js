@@ -204,7 +204,7 @@ router.get('/matches', async (req, res) => {
   const userId = req.user.id;
   try {
     const { rows } = await pool.query(
-      `SELECT m.*, 
+      `SELECT m.*,
               u.id AS other_user_id, u.name AS other_user_name, u.rating_avg, u.rating_count, u.ambassador_badge, u.founder_member, u.last_login_at
        FROM matches m
        JOIN users u ON u.id = CASE WHEN m.user_a_id = $1 THEN m.user_b_id ELSE m.user_a_id END
@@ -216,6 +216,25 @@ router.get('/matches', async (req, res) => {
        ORDER BY m.computed_at DESC`,
       [userId]
     );
+
+    // Flag matches where some of the stock either side would give is already
+    // committed to a different active swap — read-only, informational only.
+    // Same check the preview screen already runs, just surfaced earlier so
+    // users see it before opening a preview. Doesn't touch matching or
+    // inventory in any way.
+    for (const m of rows) {
+      const { rows: conflictRows } = await pool.query(
+        `SELECT 1
+         FROM get_swap_proposal($1, $2, 5) gi
+         JOIN swap_items si ON si.sticker_id = gi.sticker_id AND si.from_user_id = gi.from_user_id
+         JOIN swaps s ON s.id = si.swap_id
+         WHERE s.status IN ('proposed', 'accepted', 'posted')
+         LIMIT 1`,
+        [m.user_a_id, m.user_b_id]
+      );
+      m.has_conflict = conflictRows.length > 0;
+    }
+
     res.json(rows);
   } catch (err) {
     console.error(err);
