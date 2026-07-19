@@ -260,7 +260,7 @@ router.get('/search', requireAuth, async (req, res) => {
   if (!q || q.trim().length < 2) return res.json([]);
   try {
     const { rows } = await pool.query(
-      `SELECT u.id, u.name, u.city, u.rating_avg, u.rating_count, u.swap_streak, u.ambassador_badge,
+      `SELECT u.id, u.name, u.city, u.rating_avg, u.rating_count, u.swap_streak, u.ambassador_badge, u.founder_member, u.last_login_at,
               COUNT(DISTINCT s.id) FILTER (WHERE s.status = 'completed') AS completed_swaps,
               u.response_rate
        FROM users u
