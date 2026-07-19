@@ -874,11 +874,14 @@ router.post('/:id/posted', async (req, res) => {
     const isUserA = swap.user_a_id === userId;
     const field = isUserA ? 'user_a_posted' : 'user_b_posted';
     const otherPostedField = isUserA ? 'user_b_posted' : 'user_a_posted';
+    const photoField = isUserA ? 'user_a_postage_photo' : 'user_b_postage_photo';
 
-    // Store photo on the swap and mark this user's side as posted
+    // Store photo on this user's own column and mark their side as posted —
+    // previously both sides wrote to the same shared `postage_photo` column,
+    // so whoever posted second silently overwrote the first person's photo.
     if (photo) {
       await pool.query(
-        `UPDATE swaps SET ${field} = TRUE, ${field}_at = NOW(), postage_photo = $1, updated_at = NOW() WHERE id = $2`,
+        `UPDATE swaps SET ${field} = TRUE, ${field}_at = NOW(), ${photoField} = $1, updated_at = NOW() WHERE id = $2`,
         [photo, swapId]
       );
     } else {
