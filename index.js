@@ -35,6 +35,7 @@ const pushRoutes = require('./api/push');
 const messagingRoutes = require('./api/messaging');
 const ambassadorRoutes = require('./api/ambassador');
 const founderRoutes = require('./api/founder');
+const pl2026Routes = require('./api/pl2026');
 const { runMatchingJob } = require('./jobs/run_matching');
 
 const app = express();
@@ -82,7 +83,7 @@ const restrictedCors = cors({
 // Admin-accessible routes (admin.html is a local file with null origin,
 // so these need permissive CORS — all are protected by their own auth).
 const adminCors = cors({ origin: '*' });
-const ADMIN_PATHS = ['/api/admin', '/api/invites', '/api/feedback', '/api/donations', '/api/reports', '/api/announcements', '/api/ambassador/admin', '/api/founder/admin'];
+const ADMIN_PATHS = ['/api/admin', '/api/invites', '/api/feedback', '/api/donations', '/api/reports', '/api/announcements', '/api/ambassador/admin', '/api/founder/admin', '/api/pl2026/admin'];
 
 ADMIN_PATHS.forEach(path => app.use(path, adminCors));
 
@@ -154,6 +155,7 @@ app.use('/api/push', pushRoutes);
 app.use('/api/messages', messagingRoutes);
 app.use('/api/ambassador', ambassadorRoutes);
 app.use('/api/founder', founderRoutes);
+app.use('/api/pl2026', pl2026Routes);
 app.use('/api/admin', adminRoutes);
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
