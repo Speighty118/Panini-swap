@@ -114,7 +114,7 @@ router.get('/stats/:userId', async (req, res) => {
 
   try {
     const { rows: userRows } = await pool.query(
-      `SELECT id, name, city, profile_photo, ambassador_badge, rating_avg, rating_count, swap_streak, created_at, founder_member, founder_since FROM users WHERE id = $1`,
+      `SELECT id, name, city, profile_photo, ambassador_badge, rating_avg, rating_count, swap_streak, created_at, founder_member, founder_since, last_login_at FROM users WHERE id = $1`,
       [userId]
     );
     const user = userRows[0];
@@ -178,6 +178,7 @@ router.get('/stats/:userId', async (req, res) => {
       ambassadorBadge: user.ambassador_badge,
       isFounder: Boolean(user.founder_member),
       founderSince: user.founder_since,
+      lastLoginAt: user.last_login_at,
       ratingAvg: user.rating_avg,
       ratingCount: user.rating_count,
       memberSince: user.created_at,
@@ -204,7 +205,7 @@ router.get('/matches', async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT m.*, 
-              u.id AS other_user_id, u.name AS other_user_name, u.rating_avg, u.rating_count, u.ambassador_badge, u.founder_member
+              u.id AS other_user_id, u.name AS other_user_name, u.rating_avg, u.rating_count, u.ambassador_badge, u.founder_member, u.last_login_at
        FROM matches m
        JOIN users u ON u.id = CASE WHEN m.user_a_id = $1 THEN m.user_b_id ELSE m.user_a_id END
        JOIN users me ON me.id = $1
@@ -231,7 +232,7 @@ router.get('/history', async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT s.*,
-              u.id AS other_user_id, u.name AS other_user_name, u.ambassador_badge, u.founder_member,
+              u.id AS other_user_id, u.name AS other_user_name, u.ambassador_badge, u.founder_member, u.last_login_at,
               (SELECT COUNT(*) FROM swap_items WHERE swap_id = s.id AND from_user_id = $1) AS you_gave_count,
               (SELECT COUNT(*) FROM swap_items WHERE swap_id = s.id AND to_user_id = $1) AS you_got_count,
               r.stars AS your_rating
@@ -261,7 +262,7 @@ router.get('/mine', async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT s.*,
-              u.id AS other_user_id, u.name AS other_user_name, u.ambassador_badge, u.founder_member,
+              u.id AS other_user_id, u.name AS other_user_name, u.ambassador_badge, u.founder_member, u.last_login_at,
               COALESCE((SELECT COUNT(*) FROM swap_items WHERE swap_id = s.id AND from_user_id = $1), 0) AS you_give_count,
               COALESCE((SELECT COUNT(*) FROM swap_items WHERE swap_id = s.id AND to_user_id = $1), 0) AS you_get_count,
               CASE WHEN (SELECT COUNT(*) FROM swap_items WHERE swap_id = s.id) > 0
@@ -471,7 +472,7 @@ router.get('/:id', async (req, res) => {
     const otherUserId = swap.user_a_id === userId ? swap.user_b_id : swap.user_a_id;
 
     const { rows: otherUserRows } = await pool.query(
-      `SELECT id, name, ambassador_badge, founder_member FROM users WHERE id = $1`,
+      `SELECT id, name, ambassador_badge, founder_member, last_login_at FROM users WHERE id = $1`,
       [otherUserId]
     );
     const otherUser = otherUserRows[0];
