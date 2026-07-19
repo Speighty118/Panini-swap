@@ -218,6 +218,21 @@
       </p>
     </div>
 
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-header">
+        <h2>👕 Topps Premier League 2026 waiting list</h2>
+        <span id="pl2026Count" style="font-size:13px;color:#6B7280"></span>
+      </div>
+      <p style="padding:10px 18px 0;font-size:13px;color:#6B7280;margin:0">
+        People who tapped "Notify me" on the coming-soon teaser. When you're ready to launch, this sends everyone here a notification and clears the list.
+      </p>
+      <div id="pl2026List" style="padding:10px 18px"></div>
+      <div style="padding:0 18px 16px">
+        <button class="btn-small btn-primary" onclick="announcePL2026Launch()" id="pl2026AnnounceBtn">🚀 Send launch notification</button>
+        <span id="pl2026AnnounceResult" style="font-size:13px;color:#6B7280;margin-left:8px"></span>
+      </div>
+    </div>
+
     <div class="stats-grid" id="overviewStats">
       <div class="stat-card"><div class="stat-label">Total users</div><div class="stat-value" id="stat-total-users">—</div></div>
       <div class="stat-card"><div class="stat-label">Active last 7 days</div><div class="stat-value" id="stat-active-7d">—</div></div>
@@ -627,6 +642,7 @@ async function refreshAll() {
     loadAnnouncements(),
     loadAdminMessages(),
     loadErrorLog(),
+    loadPL2026(),
   ]);
 }
 
@@ -1333,6 +1349,38 @@ async function runReceiptReminders() {
     resultEl.textContent = `Error: ${err.message}`;
   }
   btn.disabled = false; btn.textContent = 'Run now';
+}
+
+async function loadPL2026() {
+  try {
+    const rows = await adminFetch('/pl2026/admin/list');
+    document.getElementById('pl2026Count').textContent = `${rows.length} waiting`;
+    const el = document.getElementById('pl2026List');
+    if (!rows.length) {
+      el.innerHTML = '<div style="font-size:13px;color:#9CA3AF">No one on the waiting list yet.</div>';
+      return;
+    }
+    el.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:6px">${rows.map(r => `
+      <span class="badge badge-blue" title="${e(r.email)}">${e(r.name)}</span>
+    `).join('')}</div>`;
+  } catch(err) {
+    document.getElementById('pl2026List').innerHTML = `<div class="empty">Error: ${e(err.message)}</div>`;
+  }
+}
+
+async function announcePL2026Launch() {
+  const btn = document.getElementById('pl2026AnnounceBtn');
+  const resultEl = document.getElementById('pl2026AnnounceResult');
+  if (!confirm('Send the launch notification to everyone on the Topps Premier League 2026 waiting list? This clears the list once sent.')) return;
+  btn.disabled = true; btn.textContent = 'Sending…';
+  try {
+    const { notified } = await adminFetch('/pl2026/admin/announce-launch', { method: 'POST' });
+    resultEl.textContent = `✓ Notified ${notified} user${notified !== 1 ? 's' : ''}.`;
+    loadPL2026();
+  } catch(err) {
+    resultEl.textContent = `Error: ${err.message}`;
+  }
+  btn.disabled = false; btn.textContent = '🚀 Send launch notification';
 }
 
 async function nudgeZeroStickers() {
