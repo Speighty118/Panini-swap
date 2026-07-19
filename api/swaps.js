@@ -748,17 +748,24 @@ router.post('/:id/decline', async (req, res) => {
 
 // ----------------------------------------------------------------
 // POST /api/swaps/:id/withdraw
-// Withdraw from a swap that's still in 'proposed' state, but only
-// if EXACTLY ONE side has accepted — i.e. you accepted but they
-// haven't, or they accepted but you want to pull out before they do.
-// Once both sides have accepted the swap is binding.
+// Withdraw from a swap in one of two stages:
+//   - 'proposed', with at most one side having accepted so far (once both
+//     have accepted the swap is binding).
+//   - 'accepted', but only before either side has posted. Accepting removes
+//     the swapped stickers from both users' duplicates/needs immediately, so
+//     withdrawing here has to restore them — otherwise they'd just vanish
+//     from both accounts. Once either side has posted, this is blocked and
+//     the dispute process takes over instead — real stickers are in transit.
 // ----------------------------------------------------------------
 router.post('/:id/withdraw', async (req, res) => {
   const userId = req.user.id;
   const swapId = req.params.id;
 
+  const client = await pool.connect();
   try {
-    const { rows } = await pool.query(
+    await client.query('BEGIN');
+
+    const { rows } = await client.query(
       `SELECT s.*, ua.name AS user_a_name, ub.name AS user_b_name
        FROM swaps s
        JOIN users ua ON ua.id = s.user_a_id
@@ -767,28 +774,67 @@ router.post('/:id/withdraw', async (req, res) => {
       [swapId]
     );
     const swap = rows[0];
-    if (!swap) return res.status(404).json({ error: 'Swap not found' });
+    if (!swap) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Swap not found' });
+    }
     if (swap.user_a_id !== userId && swap.user_b_id !== userId) {
+      await client.query('ROLLBACK');
       return res.status(403).json({ error: 'Not your swap' });
     }
-    if (swap.status !== 'proposed') {
-      return res.status(400).json({ error: 'You can only withdraw before both sides have accepted' });
-    }
-    // Block if both have already accepted — swap is binding at that point
-    if (swap.user_a_accepted && swap.user_b_accepted) {
-      return res.status(400).json({ error: 'Both sides have already accepted — the swap is binding. Use the dispute process if there is a problem.' });
+
+    const isAcceptedStage = swap.status === 'accepted' && !swap.user_a_posted && !swap.user_b_posted;
+
+    if (swap.status === 'proposed') {
+      // Block if both have already accepted — swap is binding at that point
+      if (swap.user_a_accepted && swap.user_b_accepted) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'Both sides have already accepted — the swap is binding. Use the dispute process if there is a problem.' });
+      }
+    } else if (!isAcceptedStage) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        error: swap.status === 'accepted'
+          ? 'You can only withdraw before either side has posted. Once stickers are in the post, use the dispute process instead.'
+          : 'This swap can no longer be withdrawn from.',
+      });
     }
 
     const withdrawerName = userId === swap.user_a_id ? swap.user_a_name : swap.user_b_name;
     const otherUserId = userId === swap.user_a_id ? swap.user_b_id : swap.user_a_id;
 
+    // Accepting removed these stickers from user_duplicates/user_needs —
+    // put them back before declining, so nothing just disappears.
+    if (isAcceptedStage) {
+      const { rows: items } = await client.query(
+        `SELECT sticker_id, from_user_id, to_user_id FROM swap_items WHERE swap_id = $1`,
+        [swapId]
+      );
+      for (const item of items) {
+        await client.query(
+          `INSERT INTO user_duplicates (user_id, sticker_id, quantity)
+           VALUES ($1, $2, 1)
+           ON CONFLICT (user_id, sticker_id) DO UPDATE SET quantity = user_duplicates.quantity + 1`,
+          [item.from_user_id, item.sticker_id]
+        );
+        await client.query(
+          `INSERT INTO user_needs (user_id, sticker_id)
+           VALUES ($1, $2)
+           ON CONFLICT (user_id, sticker_id) DO NOTHING`,
+          [item.to_user_id, item.sticker_id]
+        );
+      }
+    }
+
     // Mark as declined (reuse declined status — withdraw is a soft decline)
-    await pool.query(
+    await client.query(
       `UPDATE swaps SET status = 'declined', updated_at = NOW(),
-       declined_by_id = $1, decline_reason = 'Withdrawn by proposer'
-       WHERE id = $2`,
-      [userId, swapId]
+       declined_by_id = $1, decline_reason = $2
+       WHERE id = $3`,
+      [userId, isAcceptedStage ? 'Withdrawn after acceptance' : 'Withdrawn by proposer', swapId]
     );
+
+    await client.query('COMMIT');
 
     // Notify the other party
     await pool.query(
@@ -797,14 +843,19 @@ router.post('/:id/withdraw', async (req, res) => {
       [
         otherUserId,
         'Swap withdrawn',
-        `${withdrawerName} has withdrawn from your swap. Your stickers are available for new matches.`,
+        isAcceptedStage
+          ? `${withdrawerName} has withdrawn from your accepted swap before posting. Your stickers are available for new matches.`
+          : `${withdrawerName} has withdrawn from your swap. Your stickers are available for new matches.`,
       ]
     ).catch(() => {});
 
     res.json({ success: true });
   } catch (err) {
+    await client.query('ROLLBACK');
     console.error(err);
     res.status(500).json({ error: 'Failed to withdraw from swap' });
+  } finally {
+    client.release();
   }
 });
 
