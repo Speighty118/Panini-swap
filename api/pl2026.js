@@ -72,6 +72,18 @@ router.get('/admin/count', requireAdmin, async (req, res) => {
   }
 });
 
+// GET /api/pl2026/admin/list — who's actually on the waiting list
+router.get('/admin/list', requireAdmin, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, name, email FROM users WHERE notify_pl2026 = TRUE ORDER BY name ASC`
+    );
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to load waiting list' });
+  }
+});
+
 // POST /api/pl2026/admin/announce-launch — notifies everyone who
 // registered interest, then clears the flag so it can be reused for
 // a future collection later without re-notifying these same people.
