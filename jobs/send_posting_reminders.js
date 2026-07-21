@@ -1,11 +1,19 @@
 /**
  * Posting reminder job.
  *
- * Nudges anyone who accepted a swap 48+ hours ago but still hasn't
- * posted their side of it. This is the missing middle reminder —
- * there's already one for "you haven't accepted yet" (send_reminders.js)
- * and one for "you haven't confirmed receipt yet" (send_receipt_reminders.js),
- * but nothing used to chase the actual posting step in between.
+ * Two tiers, both driven off the same "accepted" swaps:
+ *   1. 48+ hours since acceptance, first nudge — the missing middle
+ *      reminder (there's already one for "you haven't accepted yet" in
+ *      send_reminders.js, and one for "you haven't confirmed receipt
+ *      yet" in send_receipt_reminders.js).
+ *   2. 7+ days since acceptance, a second, more direct nudge that also
+ *      points at the "Withdraw from swap" option — for swaps that
+ *      genuinely stalled. Deliberately NOT auto-declined: there's no
+ *      way to tell "actually posted but forgot to click the button"
+ *      apart from "never posted at all" from timestamps alone, and
+ *      guessing wrong would free up a sticker that's already been
+ *      physically sent. So this stays a nudge, and it's up to the user
+ *      to withdraw if it's genuinely dead.
  *
  * Only nudges someone if the person they're posting TO has actually
  * filled in their address — no point nagging someone to post when
@@ -41,7 +49,7 @@ async function sendPostingReminders() {
         AND s.posting_reminder_sent = FALSE
     `);
 
-    console.log(`[POSTING REMINDERS] Found ${swaps.length} swaps needing a nudge`);
+    console.log(`[POSTING REMINDERS] Found ${swaps.length} swaps needing a first nudge`);
 
     for (const swap of swaps) {
       // user_a posts TO user_b, so only nudge if user_b's address is ready
@@ -65,7 +73,47 @@ async function sendPostingReminders() {
         });
       }
       await pool.query(`UPDATE swaps SET posting_reminder_sent = TRUE WHERE id = $1`, [swap.id]);
-      console.log(`[POSTING REMINDERS] Reminder sent for swap #${swap.id}`);
+      console.log(`[POSTING REMINDERS] First reminder sent for swap #${swap.id}`);
+    }
+
+    const { rows: staleSwaps } = await pool.query(`
+      SELECT
+        s.id, s.user_a_id, s.user_b_id, s.user_a_posted, s.user_b_posted,
+        ua.name AS user_a_name, ub.name AS user_b_name,
+        (ua.address_line1 IS NOT NULL AND ua.city IS NOT NULL) AS user_a_address_ready,
+        (ub.address_line1 IS NOT NULL AND ub.city IS NOT NULL) AS user_b_address_ready
+      FROM swaps s
+      JOIN users ua ON ua.id = s.user_a_id
+      JOIN users ub ON ub.id = s.user_b_id
+      WHERE s.status = 'accepted'
+        AND s.updated_at <= NOW() - INTERVAL '7 days'
+        AND s.posting_reminder_sent = TRUE
+        AND s.posting_second_reminder_sent = FALSE
+    `);
+
+    console.log(`[POSTING REMINDERS] Found ${staleSwaps.length} swaps needing a second, final nudge`);
+
+    for (const swap of staleSwaps) {
+      if (!swap.user_a_posted && swap.user_b_address_ready) {
+        await createNotification(pool, {
+          userId: swap.user_a_id,
+          type: 'swap_reminder',
+          title: 'This swap has been waiting a week 📮',
+          body: `Still haven't posted to ${swap.user_b_name}? If you have, just mark it as posted. If it's not happening, you can withdraw from the swap instead.`,
+          swapId: swap.id,
+        });
+      }
+      if (!swap.user_b_posted && swap.user_a_address_ready) {
+        await createNotification(pool, {
+          userId: swap.user_b_id,
+          type: 'swap_reminder',
+          title: 'This swap has been waiting a week 📮',
+          body: `Still haven't posted to ${swap.user_a_name}? If you have, just mark it as posted. If it's not happening, you can withdraw from the swap instead.`,
+          swapId: swap.id,
+        });
+      }
+      await pool.query(`UPDATE swaps SET posting_second_reminder_sent = TRUE WHERE id = $1`, [swap.id]);
+      console.log(`[POSTING REMINDERS] Second reminder sent for swap #${swap.id}`);
     }
 
     console.log('[POSTING REMINDERS] Done');
