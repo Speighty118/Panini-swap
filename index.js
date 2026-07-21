@@ -503,6 +503,54 @@ app.post('/api/internal/feedback-resolve', async (req, res) => {
   }
 });
 
+// ---- Internal: send a custom reply to a feedback item ----
+// Same logic as POST /api/admin/feedback/:id/reply, reachable with
+// FEEDBACK_WRITE_SECRET instead of ADMIN_SECRET. In-app notification
+// only, same as resolve — no email sent.
+app.post('/api/internal/feedback-reply', async (req, res) => {
+  const providedSecret = req.headers['x-feedback-write-secret'];
+  if (!process.env.FEEDBACK_WRITE_SECRET || providedSecret !== process.env.FEEDBACK_WRITE_SECRET) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  const { id, message } = req.body;
+  if (!message || !message.trim()) {
+    return res.status(400).json({ error: 'Message is required' });
+  }
+  try {
+    const { Pool } = require('pg');
+    const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+    const { rows } = await pool.query(
+      `SELECT f.*, u.name AS user_name FROM feedback f
+       LEFT JOIN users u ON u.id = f.user_id
+       WHERE f.id = $1`,
+      [id]
+    );
+    const feedback = rows[0];
+    if (!feedback) {
+      await pool.end();
+      return res.status(404).json({ error: 'Feedback not found' });
+    }
+    if (!feedback.user_id) {
+      await pool.end();
+      return res.status(400).json({ error: 'This feedback was submitted anonymously — no user to notify' });
+    }
+    await pool.query(
+      `INSERT INTO notifications (user_id, type, title, body)
+       VALUES ($1, 'announcement', $2, $3)`,
+      [
+        feedback.user_id,
+        'Reply to your feedback',
+        `You said: "${feedback.message.slice(0, 120)}${feedback.message.length > 120 ? '…' : ''}"\n\n${message.trim()}`,
+      ]
+    );
+    await pool.end();
+    res.json({ success: true, sentTo: feedback.user_name });
+  } catch (err) {
+    console.error('Feedback reply error:', err.message);
+    res.status(500).json({ error: 'Failed to send reply' });
+  }
+});
+
 // ---- 404 ----
 app.use((req, res) => {
   res.status(404).json({ error: 'Not found' });
