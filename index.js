@@ -448,6 +448,61 @@ app.get('/api/internal/feedback-digest', async (req, res) => {
   }
 });
 
+// ---- Internal: resolve a feedback item ----
+// Same fixed/declined + in-app notification logic as
+// POST /api/admin/feedback/:id/resolve, just reachable with a
+// dedicated write-only secret (FEEDBACK_WRITE_SECRET, separate from
+// FEEDBACK_READ_SECRET) instead of the full ADMIN_SECRET. Notification
+// is an in-app row only — no email is sent from this path.
+app.post('/api/internal/feedback-resolve', async (req, res) => {
+  const providedSecret = req.headers['x-feedback-write-secret'];
+  if (!process.env.FEEDBACK_WRITE_SECRET || providedSecret !== process.env.FEEDBACK_WRITE_SECRET) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  const { id, status, notify = true } = req.body;
+  if (!['fixed', 'declined'].includes(status)) {
+    return res.status(400).json({ error: 'status must be fixed or declined' });
+  }
+  try {
+    const { Pool } = require('pg');
+    const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+    const { rows } = await pool.query(
+      `UPDATE feedback SET status = $1 WHERE id = $2
+       RETURNING *, (SELECT name FROM users WHERE id = feedback.user_id) AS user_name`,
+      [status, id]
+    );
+    const feedback = rows[0];
+    if (!feedback) {
+      await pool.end();
+      return res.status(404).json({ error: 'Feedback not found' });
+    }
+
+    if (notify && feedback.user_id) {
+      const messages = {
+        fixed: {
+          title: '✅ Your feedback has been implemented!',
+          body: `You said: "${feedback.message.slice(0, 120)}${feedback.message.length > 120 ? '…' : ''}"\n\nGreat news — this has been added to Got One Spare? Give the site a quick refresh and you should see the change. Thank you so much for taking the time to send feedback, it genuinely makes the platform better. Keep it coming — every piece of feedback helps as we work towards the full launch! 🙌`,
+        },
+        declined: {
+          title: '👋 An update on your feedback',
+          body: `You said: "${feedback.message.slice(0, 120)}${feedback.message.length > 120 ? '…' : ''}"\n\nThanks so much — we've read it carefully and really appreciate you taking the time. This particular suggestion isn't something we're able to implement right now, but we've noted it down and may well revisit it in the future. Please keep the feedback coming — it all helps as we work towards launching to everyone! 🙏`,
+        },
+      };
+      const msg = messages[status];
+      await pool.query(
+        `INSERT INTO notifications (user_id, type, title, body) VALUES ($1, 'announcement', $2, $3)`,
+        [feedback.user_id, msg.title, msg.body]
+      );
+    }
+
+    await pool.end();
+    res.json({ success: true, status, notify, userName: feedback.user_name });
+  } catch (err) {
+    console.error('Feedback resolve error:', err.message);
+    res.status(500).json({ error: 'Failed to resolve feedback' });
+  }
+});
+
 // ---- 404 ----
 app.use((req, res) => {
   res.status(404).json({ error: 'Not found' });
