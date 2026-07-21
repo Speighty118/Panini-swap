@@ -422,6 +422,33 @@ router.put('/me', requireAuth, async (req, res) => {
   }
 
   try {
+    // Re-geocode the postcode into lat/long for the "distance on matches"
+    // feature whenever it actually changes (or we're missing coordinates
+    // from before this existed). Uses postcodes.io — free, no key, UK-only.
+    // Failure here never blocks the profile save.
+    let postcodeLat = null;
+    let postcodeLng = null;
+    if (postcode) {
+      const { rows: currentRows } = await pool.query(
+        `SELECT postcode, postcode_latitude, postcode_longitude FROM users WHERE id = $1`,
+        [req.user.id]
+      );
+      const current = currentRows[0];
+      const needsGeocode = current?.postcode !== postcode || current?.postcode_latitude == null || current?.postcode_longitude == null;
+      if (needsGeocode) {
+        try {
+          const geoRes = await fetch(`https://api.postcodes.io/postcodes/${encodeURIComponent(postcode.trim())}`);
+          const geoData = await geoRes.json();
+          if (geoData.status === 200 && geoData.result) {
+            postcodeLat = geoData.result.latitude;
+            postcodeLng = geoData.result.longitude;
+          }
+        } catch (geoErr) {
+          console.error('Postcode geocode error:', geoErr.message);
+        }
+      }
+    }
+
     const { rows } = await pool.query(
       `UPDATE users
        SET name = COALESCE($1, name),
@@ -437,7 +464,9 @@ router.put('/me', requireAuth, async (req, res) => {
            email_swap_received = CASE WHEN $11::boolean IS NOT NULL THEN $11 ELSE email_swap_received END,
            email_swap_reminders = CASE WHEN $12::boolean IS NOT NULL THEN $12 ELSE email_swap_reminders END,
            email_chat_messages = CASE WHEN $13::boolean IS NOT NULL THEN $13 ELSE email_chat_messages END,
-           matching_paused = CASE WHEN $15::boolean IS NOT NULL THEN $15 ELSE matching_paused END
+           matching_paused = CASE WHEN $15::boolean IS NOT NULL THEN $15 ELSE matching_paused END,
+           postcode_latitude = COALESCE($16, postcode_latitude),
+           postcode_longitude = COALESCE($17, postcode_longitude)
        WHERE id = $14
        RETURNING *`,
       [
@@ -450,6 +479,8 @@ router.put('/me', requireAuth, async (req, res) => {
         email_chat_messages ?? null,
         req.user.id,
         matching_paused ?? null,
+        postcodeLat,
+        postcodeLng,
       ]
     );
     res.json(publicUser(rows[0]));

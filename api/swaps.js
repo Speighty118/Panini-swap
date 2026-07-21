@@ -205,7 +205,17 @@ router.get('/matches', async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT m.*,
-              u.id AS other_user_id, u.name AS other_user_name, u.rating_avg, u.rating_count, u.ambassador_badge, u.founder_member, u.last_login_at
+              u.id AS other_user_id, u.name AS other_user_name, u.rating_avg, u.rating_count, u.ambassador_badge, u.founder_member, u.last_login_at,
+              CASE
+                WHEN me.postcode_latitude IS NOT NULL AND me.postcode_longitude IS NOT NULL
+                 AND u.postcode_latitude IS NOT NULL AND u.postcode_longitude IS NOT NULL
+                THEN ROUND((3959 * acos(LEAST(1, GREATEST(-1,
+                       cos(radians(me.postcode_latitude)) * cos(radians(u.postcode_latitude)) *
+                       cos(radians(u.postcode_longitude) - radians(me.postcode_longitude)) +
+                       sin(radians(me.postcode_latitude)) * sin(radians(u.postcode_latitude))
+                     ))))::numeric, 1)
+                ELSE NULL
+              END AS distance_miles
        FROM matches m
        JOIN users u ON u.id = CASE WHEN m.user_a_id = $1 THEN m.user_b_id ELSE m.user_a_id END
        JOIN users me ON me.id = $1
