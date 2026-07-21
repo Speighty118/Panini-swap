@@ -7,6 +7,7 @@ const express = require('express');
 const router = express.Router();
 const { Pool } = require('pg');
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const { requireAuth } = require('./middleware/auth');
 
 function requireAdmin(req, res, next) {
   const provided = req.headers['x-admin-secret'];
@@ -51,6 +52,50 @@ router.post('/', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to file report' });
+  }
+});
+
+// GET /api/reports/mine — reports the logged-in user has filed themselves
+router.get('/mine', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT r.id, r.swap_id, r.notes, r.created_at,
+              u.name AS reported_name
+       FROM no_show_reports r
+       JOIN users u ON u.id = r.reported_user_id
+       WHERE r.reporter_id = $1
+       ORDER BY r.created_at DESC`,
+      [req.user.id]
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch your reports' });
+  }
+});
+
+// DELETE /api/reports/:id — withdraw a report you filed yourself.
+// Only the original reporter can withdraw it — not the reported user,
+// not anyone else. Decrements times_reported, floored at 0.
+router.delete('/:id', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`SELECT * FROM no_show_reports WHERE id = $1`, [req.params.id]);
+    const report = rows[0];
+    if (!report) return res.status(404).json({ error: 'Report not found' });
+    if (report.reporter_id !== req.user.id) {
+      return res.status(403).json({ error: 'You can only withdraw a report you filed yourself' });
+    }
+
+    await pool.query(`DELETE FROM no_show_reports WHERE id = $1`, [req.params.id]);
+    await pool.query(
+      `UPDATE users SET times_reported = GREATEST(COALESCE(times_reported, 0) - 1, 0) WHERE id = $1`,
+      [report.reported_user_id]
+    );
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to withdraw report' });
   }
 });
 
