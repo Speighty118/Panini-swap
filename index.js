@@ -416,6 +416,38 @@ app.all('/api/internal/run-zero-sticker-nudge', async (req, res) => {
   }
 });
 
+// ---- Internal: read-only pending feedback digest ----
+// Deliberately narrow — a dedicated secret (not ADMIN_SECRET, not
+// CRON_SECRET) that can only ever read pending feedback. Nothing here
+// can resolve tickets, touch users, or reach any other admin data, so
+// this credential is safe to hand to an automated process without the
+// blast radius a full admin or database credential would carry.
+// Header-based (not query param) since this is only ever meant to be
+// called by tools that can set headers, e.g. curl.
+app.get('/api/internal/feedback-digest', async (req, res) => {
+  const providedSecret = req.headers['x-feedback-secret'];
+  if (!process.env.FEEDBACK_READ_SECRET || providedSecret !== process.env.FEEDBACK_READ_SECRET) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  try {
+    const { Pool } = require('pg');
+    const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+    const { rows } = await pool.query(
+      `SELECT f.id, f.message, f.page, f.created_at, u.name AS user_name, u.email AS user_email
+       FROM feedback f
+       LEFT JOIN users u ON u.id = f.user_id
+       WHERE f.status = 'pending'
+       ORDER BY f.created_at DESC
+       LIMIT 200`
+    );
+    await pool.end();
+    res.json(rows);
+  } catch (err) {
+    console.error('Feedback digest error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch feedback digest' });
+  }
+});
+
 // ---- 404 ----
 app.use((req, res) => {
   res.status(404).json({ error: 'Not found' });
