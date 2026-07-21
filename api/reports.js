@@ -1,7 +1,13 @@
 /**
  * No-show reports API
- * POST /api/reports          — file a no-show report
- * GET  /api/reports          — admin: list all reports
+ * GET    /api/reports        — admin: list all reports
+ * GET    /api/reports/mine   — reports the logged-in user has filed
+ * DELETE /api/reports/:id    — withdraw a report you filed yourself
+ *
+ * Filing is retired — DisputeModal (see api/disputes.js) already covers
+ * the same "they never posted" scenario more completely (escalates the
+ * swap, emails the other party, visible to admins), so this file only
+ * keeps read/withdraw support for reports that already exist.
  */
 const express = require('express');
 const router = express.Router();
@@ -16,44 +22,6 @@ function requireAdmin(req, res, next) {
   }
   next();
 }
-
-// POST /api/reports — file a no-show report
-router.post('/', async (req, res) => {
-  const reporterId = req.user.id;
-  const { swapId, notes } = req.body;
-
-  try {
-    // Verify this is a real swap the reporter was part of
-    const { rows: swapRows } = await pool.query(
-      `SELECT * FROM swaps WHERE id = $1 AND (user_a_id = $2 OR user_b_id = $2)`,
-      [swapId, reporterId]
-    );
-    const swap = swapRows[0];
-    if (!swap) return res.status(404).json({ error: 'Swap not found' });
-    if (!['posted', 'accepted'].includes(swap.status)) {
-      return res.status(400).json({ error: 'Can only report no-shows on swaps that have been posted' });
-    }
-
-    const reportedUserId = swap.user_a_id === reporterId ? swap.user_b_id : swap.user_a_id;
-
-    await pool.query(
-      `INSERT INTO no_show_reports (reporter_id, reported_user_id, swap_id, notes)
-       VALUES ($1, $2, $3, $4)`,
-      [reporterId, reportedUserId, swapId, notes || null]
-    );
-
-    // Increment times_reported on the reported user
-    await pool.query(
-      `UPDATE users SET times_reported = COALESCE(times_reported, 0) + 1 WHERE id = $1`,
-      [reportedUserId]
-    );
-
-    res.json({ success: true });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to file report' });
-  }
-});
 
 // GET /api/reports/mine — reports the logged-in user has filed themselves
 router.get('/mine', requireAuth, async (req, res) => {
