@@ -476,8 +476,8 @@
   <!-- FEEDBACK -->
   <div id="panel-feedback" class="panel">
     <div class="card" style="margin-bottom:16px">
-      <div class="card-header"><h2>🚀 Future Collection Interest</h2><button class="btn-small btn-secondary" onclick="loadFutureCollections()">Refresh</button></div>
-      <div id="futureCollectionsList" style="padding:16px"></div>
+      <div class="card-header"><h2>📱 App Interest Survey</h2><button class="btn-small btn-secondary" onclick="loadAppSurvey()">Refresh</button></div>
+      <div id="appSurveyList" style="padding:16px"></div>
     </div>
     <div class="card" style="margin-bottom:80px">
       <div class="card-header">
@@ -638,7 +638,7 @@ async function refreshAll() {
     loadDonations(),
     loadAnalytics(),
     loadHealth(),
-    loadFutureCollections(),
+    loadAppSurvey(),
     loadAnnouncements(),
     loadAdminMessages(),
     loadErrorLog(),
@@ -1869,27 +1869,37 @@ function switchFeedbackTab(status) {
   loadFeedback();
 }
 
-async function loadFutureCollections() {
-  const el = document.getElementById('futureCollectionsList');
+async function loadAppSurvey() {
+  const el = document.getElementById('appSurveyList');
   try {
-    const data = await adminFetch('/admin/future-collections');
-    if (!data.results?.length) {
-      el.innerHTML = '<div style="color:#9CA3AF;font-size:13px">No votes yet.</div>';
+    const data = await adminFetch('/admin/app-survey');
+    if (!data.totalResponses) {
+      el.innerHTML = '<div style="color:#9CA3AF;font-size:13px">No responses yet.</div>';
       return;
     }
-    const max = data.results[0].votes;
-    el.innerHTML = data.results.map(r => `
-      <div style="margin-bottom:14px">
+    el.innerHTML = `
+      <div style="margin-bottom:16px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-          <span style="font-size:13px;font-weight:600;color:#111">${r.emoji || '📦'} ${r.label}</span>
-          <span style="font-size:12px;font-weight:700;color:#1AAB8A">${r.votes} interested</span>
+          <span style="font-size:13px;font-weight:600;color:#111">Would an app be useful?</span>
+          <span style="font-size:12px;font-weight:700;color:#1AAB8A">${data.wantsApp.yes} yes / ${data.wantsApp.no} no</span>
         </div>
         <div style="height:6px;background:#f0f0f0;border-radius:3px;overflow:hidden">
-          <div style="height:100%;width:${Math.round((r.votes/max)*100)}%;background:${r.pct > 30 ? '#1AAB8A' : '#0B1120'};border-radius:3px;transition:width 0.4s"></div>
+          <div style="height:100%;width:${data.wantsApp.yesPct}%;background:#1AAB8A;border-radius:3px;transition:width 0.4s"></div>
         </div>
       </div>
-    `).join('') + `
-      <div style="font-size:11px;color:#bbb;margin-top:8px">${data.totalUsers} total users</div>
+      <div style="font-size:12px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px">Phone OS</div>
+      ${data.phoneOs.map(r => `
+        <div style="margin-bottom:14px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+            <span style="font-size:13px;font-weight:600;color:#111">${r.label}</span>
+            <span style="font-size:12px;font-weight:700;color:#1AAB8A">${r.count} (${r.pct}%)</span>
+          </div>
+          <div style="height:6px;background:#f0f0f0;border-radius:3px;overflow:hidden">
+            <div style="height:100%;width:${r.pct}%;background:#0B1120;border-radius:3px;transition:width 0.4s"></div>
+          </div>
+        </div>
+      `).join('')}
+      <div style="font-size:11px;color:#bbb;margin-top:8px">${data.totalResponses} total responses</div>
       <div style="display:flex;gap:16px;margin-top:12px;padding-top:12px;border-top:1px solid #f0f0f0">
         <div style="flex:1">
           <div style="font-size:20px;font-weight:700;color:#0B1120">${data.pwaInstalls || 0}</div>

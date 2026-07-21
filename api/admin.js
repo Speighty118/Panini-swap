@@ -1521,45 +1521,38 @@ router.post('/test-push', async (req, res) => {
   }
 });
 
-// GET /api/admin/future-collections
-// Returns future collection vote results + PWA install stats for the admin dashboard.
+// GET /api/admin/app-survey
+// Returns app-interest survey results + PWA install stats for the admin dashboard.
 // ----------------------------------------------------------------
-router.get('/future-collections', async (req, res) => {
+router.get('/app-survey', async (req, res) => {
   try {
-    const [votes, installs, pushSubs, installUsers, pushUsers] = await Promise.all([
-      pool.query(`SELECT collection_key, COUNT(*) AS votes FROM future_collection_votes GROUP BY collection_key ORDER BY votes DESC`),
+    const [survey, phoneOs, installs, pushSubs, installUsers, pushUsers] = await Promise.all([
+      pool.query(`SELECT wants_app, COUNT(*) AS count FROM app_interest_survey GROUP BY wants_app`),
+      pool.query(`SELECT phone_os, COUNT(*) AS count FROM app_interest_survey GROUP BY phone_os ORDER BY count DESC`),
       pool.query(`SELECT COUNT(*) FROM users WHERE pwa_installed_at IS NOT NULL`),
       pool.query(`SELECT COUNT(*) FROM users WHERE push_subscription IS NOT NULL`),
       pool.query(`SELECT name, email, pwa_installed_at FROM users WHERE pwa_installed_at IS NOT NULL ORDER BY pwa_installed_at DESC`),
       pool.query(`SELECT name, email FROM users WHERE push_subscription IS NOT NULL ORDER BY name ASC`),
     ]);
-    const totalResult = await pool.query(`SELECT COUNT(*) FROM users`);
-    const totalUsers = parseInt(totalResult.rows[0].count);
-    const LABELS = {
-      wc_2030: 'FIFA World Cup 2030',
-      euro_2028: 'UEFA Euro 2028',
-      nations_league: 'UEFA Nations League',
-      pl_stickers: 'Panini Premier League Stickers',
-      pl_adrenalyn: 'Panini Premier League Adrenalyn XL',
-      match_attax_cl: 'Match Attax Champions League',
-      match_attax_pl: 'Match Attax Premier League',
-      wwc_2027: "Women's World Cup 2027",
-      weuro_2029: "Women's Euro 2029",
-      club_wc: 'FIFA Club World Cup',
-      copa_2028: 'Copa America 2028',
-      afcon: 'Africa Cup of Nations',
-      conference_league: 'UEFA Conference League',
-      scottish_prem: 'Scottish Premiership Stickers',
-      efl: 'EFL Sticker Collection',
-    };
+
+    const totalResponses = survey.rows.reduce((sum, r) => sum + parseInt(r.count, 10), 0);
+    const yesCount = parseInt(survey.rows.find(r => r.wants_app === true)?.count || 0, 10);
+    const noCount = parseInt(survey.rows.find(r => r.wants_app === false)?.count || 0, 10);
+    const PHONE_LABELS = { ios: 'iPhone (iOS)', android: 'Android', neither: 'Neither' };
+
     res.json({
-      results: votes.rows.map(r => ({
-        key: r.collection_key,
-        label: LABELS[r.collection_key] || r.collection_key,
-        votes: parseInt(r.votes),
-        pct: Math.round((parseInt(r.votes) / totalUsers) * 100),
+      totalResponses,
+      wantsApp: {
+        yes: yesCount,
+        no: noCount,
+        yesPct: totalResponses > 0 ? Math.round((yesCount / totalResponses) * 100) : 0,
+      },
+      phoneOs: phoneOs.rows.map(r => ({
+        key: r.phone_os,
+        label: PHONE_LABELS[r.phone_os] || r.phone_os,
+        count: parseInt(r.count, 10),
+        pct: totalResponses > 0 ? Math.round((parseInt(r.count, 10) / totalResponses) * 100) : 0,
       })),
-      totalUsers,
       pwaInstalls: parseInt(installs.rows[0].count),
       pushSubscribers: parseInt(pushSubs.rows[0].count),
       installUsers: installUsers.rows,
