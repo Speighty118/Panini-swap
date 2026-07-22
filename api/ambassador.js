@@ -99,6 +99,9 @@ router.post('/admin/:id/approve', requireAdmin, async (req, res) => {
       [rows[0].user_id]
     );
 
+    const { awardXp } = require('./xp');
+    awardXp(pool, { userId: rows[0].user_id, eventType: 'ambassador_bonus' }).catch(() => {});
+
     // Notify the user
     const { createNotification } = require('./notifications');
     await createNotification(pool, {

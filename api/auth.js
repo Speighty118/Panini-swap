@@ -11,6 +11,7 @@ const crypto = require('crypto');
 const { Pool } = require('pg');
 const { requireAuth, JWT_SECRET } = require('./middleware/auth');
 const { sendVerificationEmail, sendPasswordResetEmail } = require('./email');
+const { levelForXp, xpForNextLevel, xpForCurrentLevel } = require('./xp');
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const SALT_ROUNDS = 12;
@@ -24,7 +25,12 @@ function signToken(userId, name) {
 function publicUser(row) {
   // Strip password_hash before ever sending a user object to the client
   const { password_hash, ...rest } = row;
-  return rest;
+  return {
+    ...rest,
+    level: levelForXp(row.xp || 0),
+    nextLevelXp: xpForNextLevel(row.xp || 0),
+    currentLevelXp: xpForCurrentLevel(row.xp || 0),
+  };
 }
 
 // ----------------------------------------------------------------

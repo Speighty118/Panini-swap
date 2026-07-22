@@ -67,6 +67,10 @@ router.post('/', requireAuth, async (req, res) => {
 
     await client.query('COMMIT');
 
+    // Award XP for leaving a rating — fire and forget, after commit
+    const { awardXp } = require('./xp');
+    awardXp(pool, { userId, eventType: 'rating_given', relatedId: swapId }).catch(() => {});
+
     // Let the person know they've been rated — fires after commit,
     // fire-and-forget so a notification hiccup can't undo the rating.
     try {

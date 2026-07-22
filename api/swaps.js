@@ -979,10 +979,12 @@ router.post('/:id/posted', async (req, res) => {
       );
     }
 
-    // Award verified postage badge if photo was provided
+    // Award verified postage badge + XP if photo was provided
     if (photo) {
       const { awardBadge } = require('./badges');
       awardBadge(userId, 'verified_postage').catch(() => {});
+      const { awardXp } = require('./xp');
+      awardXp(pool, { userId, eventType: 'verified_postage', relatedId: swapId }).catch(() => {});
     }
 
     // Notify the other party
@@ -1055,13 +1057,19 @@ router.post('/:id/received', async (req, res) => {
 
     await client.query('COMMIT');
 
-    // Award badges after commit — fire and forget
+    // Award badges + XP after commit — fire and forget
     if (updated.user_a_received && updated.user_b_received) {
       const { checkStreakBadges, updateResponseRate } = require('./badges');
       checkStreakBadges(updated.user_a_id).catch(() => {});
       checkStreakBadges(updated.user_b_id).catch(() => {});
       updateResponseRate(updated.user_a_id).catch(() => {});
       updateResponseRate(updated.user_b_id).catch(() => {});
+
+      const { awardXp } = require('./xp');
+      for (const uid of [updated.user_a_id, updated.user_b_id]) {
+        awardXp(pool, { userId: uid, eventType: 'completed_swap', relatedId: swapId }).catch(() => {});
+        awardXp(pool, { userId: uid, eventType: 'first_swap_bonus' }).catch(() => {});
+      }
     }
 
     // Notify the other party that stickers were received
