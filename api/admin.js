@@ -1368,34 +1368,81 @@ router.post('/broadcast', async (req, res) => {
     return res.status(400).json({ error: 'title is required' });
   }
   try {
-    const { rows: users } = await pool.query(
-      `SELECT id FROM users WHERE is_suspended = FALSE AND is_active = TRUE`
-    );
-    for (const user of users) {
-      await pool.query(
-        `INSERT INTO notifications (user_id, type, title, body)
-         VALUES ($1, $2, $3, $4)`,
-        [user.id, type, title.trim(), body?.trim() || null]
-      );
-    }
-
-    // Push to all subscribed users — fire and forget
-    const { sendPushNotification } = require('./push');
-    const { rows: pushUsers } = await pool.query(
-      `SELECT id FROM users WHERE push_subscription IS NOT NULL`
-    );
-    pushUsers.forEach(u => {
-      sendPushNotification(u.id, {
-        title: `📢 ${title.trim()}`,
-        body: body?.trim()?.slice(0, 100) || '',
-      }).catch(() => {});
-    });
-    console.log(`[BROADCAST] Push sent to ${pushUsers.length} subscribers`);
-
-    res.json({ sent: users.length });
+    const { sendBroadcastToAllUsers } = require('./broadcast');
+    const { sentCount, pushCount } = await sendBroadcastToAllUsers(pool, { title, body, type });
+    console.log(`[BROADCAST] Push sent to ${pushCount} subscribers`);
+    res.json({ sent: sentCount });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to send broadcast' });
+  }
+});
+
+// ----------------------------------------------------------------
+// POST /api/admin/scheduled-announcements
+// Queue an announcement to be sent at a future date/time by the
+// send-scheduled-announcements cron job, instead of immediately.
+// Body: { title, body, sendAt } — sendAt is an ISO datetime string.
+// ----------------------------------------------------------------
+router.post('/scheduled-announcements', async (req, res) => {
+  const { title, body, sendAt } = req.body;
+  if (!title || !title.trim()) {
+    return res.status(400).json({ error: 'title is required' });
+  }
+  const sendAtDate = new Date(sendAt);
+  if (!sendAt || Number.isNaN(sendAtDate.getTime())) {
+    return res.status(400).json({ error: 'A valid sendAt date/time is required' });
+  }
+  if (sendAtDate.getTime() <= Date.now()) {
+    return res.status(400).json({ error: 'sendAt must be in the future' });
+  }
+  try {
+    const { rows } = await pool.query(
+      `INSERT INTO scheduled_announcements (title, body, send_at)
+       VALUES ($1, $2, $3) RETURNING *`,
+      [title.trim(), body?.trim() || null, sendAtDate.toISOString()]
+    );
+    res.json(rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to schedule announcement' });
+  }
+});
+
+// ----------------------------------------------------------------
+// GET /api/admin/scheduled-announcements
+// List scheduled announcements, most recently created first.
+// ----------------------------------------------------------------
+router.get('/scheduled-announcements', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT * FROM scheduled_announcements ORDER BY send_at ASC LIMIT 100`
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch scheduled announcements' });
+  }
+});
+
+// ----------------------------------------------------------------
+// DELETE /api/admin/scheduled-announcements/:id
+// Cancel a scheduled announcement — only while still pending.
+// ----------------------------------------------------------------
+router.delete('/scheduled-announcements/:id', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `UPDATE scheduled_announcements SET status = 'cancelled'
+       WHERE id = $1 AND status = 'pending' RETURNING *`,
+      [req.params.id]
+    );
+    if (!rows[0]) {
+      return res.status(400).json({ error: 'Announcement not found or already sent/cancelled' });
+    }
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to cancel scheduled announcement' });
   }
 });
 

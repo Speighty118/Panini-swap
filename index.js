@@ -327,6 +327,24 @@ app.all('/api/internal/run-proposal-expiry', async (req, res) => {
   }
 });
 
+// ---- Internal: trigger the scheduled-announcements job ----
+// Set up a new cron job hitting this URL every 5 minutes. Sends any
+// admin-scheduled announcement whose send_at time has arrived.
+app.all('/api/internal/run-scheduled-announcements', async (req, res) => {
+  const providedSecret = req.query.secret;
+  if (!process.env.CRON_SECRET || providedSecret !== process.env.CRON_SECRET) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  try {
+    const { sendScheduledAnnouncements } = require('./jobs/send_scheduled_announcements');
+    const result = await sendScheduledAnnouncements();
+    res.json({ success: true, ranAt: new Date().toISOString(), ...result });
+  } catch (err) {
+    console.error('Scheduled announcements job failed:', err.message);
+    res.status(500).json({ error: 'Scheduled announcements job failed' });
+  }
+});
+
 // ---- Internal: trigger the "post your stickers" reminder job ----
 // Set up a new cron job hitting this URL every few hours. Nudges
 // anyone who accepted a swap 48+ hours ago but hasn't posted yet.

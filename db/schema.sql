@@ -98,6 +98,21 @@ CREATE TABLE ratings (
     UNIQUE(swap_id, rater_id)
 );
 
+-- Admin broadcasts queued for a future date/time (sent by a periodic
+-- cron job rather than immediately, unlike the instant broadcast path)
+CREATE TABLE scheduled_announcements (
+    id              SERIAL PRIMARY KEY,
+    title           VARCHAR(255) NOT NULL,
+    body            TEXT,
+    send_at         TIMESTAMP NOT NULL,
+    status          VARCHAR(20) NOT NULL DEFAULT 'pending',
+                    -- pending -> sent, or pending -> cancelled
+    created_at      TIMESTAMP DEFAULT NOW(),
+    sent_at         TIMESTAMP
+);
+
+CREATE INDEX idx_scheduled_announcements_due ON scheduled_announcements(status, send_at);
+
 -- Indexes for the matching query (this is the expensive one)
 CREATE INDEX idx_duplicates_user ON user_duplicates(user_id);
 CREATE INDEX idx_duplicates_sticker ON user_duplicates(sticker_id);

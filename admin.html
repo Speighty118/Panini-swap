@@ -247,7 +247,7 @@
     <div class="card">
       <div class="card-header"><h2>📢 Send announcement to all users</h2></div>
       <div style="padding:16px 18px;display:flex;flex-direction:column;gap:10px">
-        <p style="font-size:13px;color:#6B7280;margin:0">This sends a notification to every active user's bell icon immediately.</p>
+        <p style="font-size:13px;color:#6B7280;margin:0">Send immediately, or schedule for a future date/time — either way it goes to every active user's bell icon and push notification.</p>
         <input type="text" id="broadcastTitle" placeholder="Title (e.g. New features added!)" style="margin:0" />
         <textarea id="broadcastBody" placeholder="Optional message (e.g. You can now bulk add stickers by team — try it on your dashboard!)" rows="3" style="padding:10px 14px;border-radius:8px;border:1px solid rgba(0,0,0,0.12);font-size:13px;font-family:inherit;resize:vertical"></textarea>
         <div style="display:flex;gap:10px;align-items:center">
@@ -255,6 +255,13 @@
           <button class="btn-small btn-secondary" onclick="testBroadcastPush()" style="margin-left:8px">🔔 Test push (to you only)</button>
           <span id="broadcastResult" style="font-size:13px;color:#1AAB8A"></span>
         </div>
+        <div style="border-top:1px solid #F3F4F6;margin-top:6px;padding-top:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <label style="font-size:13px;color:#6B7280">Or schedule for:</label>
+          <input type="datetime-local" id="scheduleSendAt" style="margin:0;width:auto" />
+          <button class="btn-small btn-primary" onclick="scheduleAnnouncement()">Schedule</button>
+          <span id="scheduleResult" style="font-size:13px;color:#1AAB8A"></span>
+        </div>
+        <div id="scheduledAnnouncementsList"></div>
       </div>
     </div>
   </div>
@@ -643,6 +650,7 @@ async function refreshAll() {
     loadAdminMessages(),
     loadErrorLog(),
     loadPL2026(),
+    loadScheduledAnnouncements(),
   ]);
 }
 
@@ -661,6 +669,62 @@ async function sendBroadcast() {
     document.getElementById('broadcastTitle').value = '';
     document.getElementById('broadcastBody').value = '';
     setTimeout(() => { resultEl.textContent = ''; }, 4000);
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+async function scheduleAnnouncement() {
+  const title = document.getElementById('broadcastTitle').value.trim();
+  const body = document.getElementById('broadcastBody').value.trim();
+  const sendAtInput = document.getElementById('scheduleSendAt').value;
+  const resultEl = document.getElementById('scheduleResult');
+  if (!title) { alert('Please enter a title for the announcement.'); return; }
+  if (!sendAtInput) { alert('Please pick a date and time to schedule for.'); return; }
+  const sendAt = new Date(sendAtInput);
+  if (sendAt.getTime() <= Date.now()) { alert('Please pick a time in the future.'); return; }
+  if (!confirm(`Schedule "${title}" to go out to ALL active users at ${sendAt.toLocaleString()}?`)) return;
+  try {
+    await adminFetch('/admin/scheduled-announcements', {
+      method: 'POST',
+      body: JSON.stringify({ title, body, sendAt: sendAt.toISOString() }),
+    });
+    resultEl.textContent = `✓ Scheduled for ${sendAt.toLocaleString()}`;
+    document.getElementById('broadcastTitle').value = '';
+    document.getElementById('broadcastBody').value = '';
+    document.getElementById('scheduleSendAt').value = '';
+    setTimeout(() => { resultEl.textContent = ''; }, 4000);
+    loadScheduledAnnouncements();
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+async function loadScheduledAnnouncements() {
+  try {
+    const scheduled = await adminFetch('/admin/scheduled-announcements');
+    const el = document.getElementById('scheduledAnnouncementsList');
+    const pending = scheduled.filter(s => s.status === 'pending');
+    const past = scheduled.filter(s => s.status !== 'pending').slice(0, 10);
+    if (!pending.length && !past.length) { el.innerHTML = ''; return; }
+    const row = (s) => `
+      <div style="padding:10px 0;border-bottom:1px solid #F3F4F6;display:flex;justify-content:space-between;align-items:center;gap:10px">
+        <div>
+          <div style="font-weight:600;font-size:13px">${s.title}</div>
+          <div style="font-size:12px;color:#6B7280">
+            ${s.status === 'pending' ? 'Scheduled for' : s.status === 'sent' ? 'Sent at' : 'Cancelled — was scheduled for'}
+            ${new Date(s.status === 'sent' && s.sent_at ? s.sent_at : s.send_at).toLocaleString()}
+          </div>
+        </div>
+        ${s.status === 'pending' ? `<button class="btn-small btn-danger" onclick="cancelScheduledAnnouncement(${s.id})">Cancel</button>` : `<span style="font-size:12px;color:#9CA3AF;text-transform:capitalize">${s.status}</span>`}
+      </div>`;
+    el.innerHTML =
+      (pending.length ? `<div style="padding-top:12px;font-size:12px;font-weight:600;color:#6B7280;text-transform:uppercase;letter-spacing:0.05em">Scheduled</div>${pending.map(row).join('')}` : '') +
+      (past.length ? `<div style="padding-top:12px;font-size:12px;font-weight:600;color:#6B7280;text-transform:uppercase;letter-spacing:0.05em">Recent</div>${past.map(row).join('')}` : '');
+  } catch(e) { console.error('Failed to load scheduled announcements:', e.message); }
+}
+
+async function cancelScheduledAnnouncement(id) {
+  if (!confirm('Cancel this scheduled announcement?')) return;
+  try {
+    await adminFetch(`/admin/scheduled-announcements/${id}`, { method: 'DELETE' });
+    loadScheduledAnnouncements();
   } catch(e) { alert('Error: ' + e.message); }
 }
 
