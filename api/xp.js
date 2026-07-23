@@ -22,6 +22,7 @@ const XP_VALUES = {
   verified_postage: 10,
   rating_given: 10,
   ambassador_bonus: 30,
+  referral_bonus: 30,
 };
 
 // Cumulative XP required to reach each level. Index 0 = level 1.

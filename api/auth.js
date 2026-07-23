@@ -22,6 +22,32 @@ function signToken(userId, name) {
   return jwt.sign({ userId, name }, JWT_SECRET, { expiresIn: TOKEN_EXPIRY });
 }
 
+// 6-char codes from a 32-char alphabet (no 0/O/1/I, easy to read/type
+// when shared) — ~1 billion combinations, plenty at this scale.
+const REFERRAL_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+function generateReferralCode() {
+  let code = '';
+  for (let i = 0; i < 6; i++) code += REFERRAL_CODE_CHARS[Math.floor(Math.random() * REFERRAL_CODE_CHARS.length)];
+  return code;
+}
+
+// Generates a referral code guaranteed unique against the DB, retrying
+// on the rare collision. Used both at signup and lazily for existing
+// users the first time they ask for their referral link.
+async function assignReferralCode(userId) {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const candidate = generateReferralCode();
+    const { rows } = await pool.query(
+      `UPDATE users SET referral_code = $1
+       WHERE id = $2 AND NOT EXISTS (SELECT 1 FROM users WHERE referral_code = $1)
+       RETURNING referral_code`,
+      [candidate, userId]
+    );
+    if (rows[0]) return rows[0].referral_code;
+  }
+  throw new Error('Could not generate a unique referral code');
+}
+
 function publicUser(row) {
   // Strip password_hash before ever sending a user object to the client
   const { password_hash, ...rest } = row;
@@ -40,7 +66,7 @@ function publicUser(row) {
 // flagged email_verified = false until the link is clicked.
 // ----------------------------------------------------------------
 router.post('/signup', async (req, res) => {
-  const { name, email, password, inviteCode } = req.body;
+  const { name, email, password, inviteCode, referralCode } = req.body;
   const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || 'unknown';
 
   if (!name || !email || !password) {
@@ -84,12 +110,31 @@ router.post('/signup', async (req, res) => {
     const verificationToken = crypto.randomBytes(32).toString('hex');
     const tokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24h
 
+    // Link to whoever referred this signup, if their code is valid —
+    // silently ignored if not, never blocks signup over a bad code.
+    // The referrer's XP doesn't pay out here; that only happens once
+    // this new user completes their own first swap (see swaps.js).
+    let referredByUserId = null;
+    if (referralCode) {
+      const { rows: refRows } = await pool.query(
+        `SELECT id FROM users WHERE referral_code = $1`,
+        [referralCode.trim().toUpperCase()]
+      );
+      referredByUserId = refRows[0]?.id || null;
+    }
+
     const { rows } = await pool.query(
-      `INSERT INTO users (name, email, password_hash, verification_token, verification_token_expires)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO users (name, email, password_hash, verification_token, verification_token_expires, referred_by_user_id)
+       VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING *`,
-      [name, email.toLowerCase(), passwordHash, verificationToken, tokenExpiry]
+      [name, email.toLowerCase(), passwordHash, verificationToken, tokenExpiry, referredByUserId]
     );
+
+    // Every user gets their own shareable referral code, generated
+    // right away rather than lazily, so it's ready the first time
+    // they open Profile.
+    const referralCodeForUser = await assignReferralCode(rows[0].id);
+    rows[0].referral_code = referralCodeForUser;
 
     await pool.query(
       `INSERT INTO signup_attempts (ip_address, email) VALUES ($1, $2)`,
@@ -402,6 +447,23 @@ router.get('/me', requireAuth, async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to fetch profile' });
+  }
+});
+
+// ----------------------------------------------------------------
+// GET /api/auth/me/referral
+// This user's referral code, generating one on the spot if they
+// signed up before this feature existed and don't have one yet.
+// ----------------------------------------------------------------
+router.get('/me/referral', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT referral_code FROM users WHERE id = $1', [req.user.id]);
+    if (!rows[0]) return res.status(404).json({ error: 'User not found' });
+    const code = rows[0].referral_code || await assignReferralCode(req.user.id);
+    res.json({ code });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch referral code' });
   }
 });
 

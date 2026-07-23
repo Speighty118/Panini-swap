@@ -1070,6 +1070,19 @@ router.post('/:id/received', async (req, res) => {
         awardXp(pool, { userId: uid, eventType: 'completed_swap', relatedId: swapId }).catch(() => {});
         awardXp(pool, { userId: uid, eventType: 'first_swap_bonus' }).catch(() => {});
       }
+
+      // Pay out the referrer's bonus once their referral proves real —
+      // keyed on the referred user's own id (not the swap), so this
+      // only ever pays once per referral relationship no matter how
+      // many swaps that person goes on to complete.
+      pool.query(
+        `SELECT id, referred_by_user_id FROM users WHERE id = ANY($1::int[]) AND referred_by_user_id IS NOT NULL`,
+        [[updated.user_a_id, updated.user_b_id]]
+      ).then(({ rows: referred }) => {
+        for (const r of referred) {
+          awardXp(pool, { userId: r.referred_by_user_id, eventType: 'referral_bonus', relatedId: r.id }).catch(() => {});
+        }
+      }).catch(() => {});
     }
 
     // Notify the other party that stickers were received
