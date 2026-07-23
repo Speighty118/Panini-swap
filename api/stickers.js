@@ -55,6 +55,7 @@ router.get('/', async (req, res) => {
 // for building a team filter dropdown.
 // ----------------------------------------------------------------
 router.get('/teams', async (req, res) => {
+  const { albumId = 1 } = req.query;
   try {
     const { rows } = await pool.query(
       `SELECT
@@ -65,9 +66,10 @@ router.get('/teams', async (req, res) => {
          MIN(CAST(NULLIF(regexp_replace(sticker_number, '[^0-9]', '', 'g'), '') AS INTEGER)) AS first_num_int,
          MAX(CAST(NULLIF(regexp_replace(sticker_number, '[^0-9]', '', 'g'), '') AS INTEGER)) AS last_num_int
        FROM stickers
-       WHERE team_name IS NOT NULL
+       WHERE team_name IS NOT NULL AND album_id = $1
        GROUP BY team_name
-       ORDER BY team_name`
+       ORDER BY team_name`,
+      [albumId]
     );
     // Build the display range using numeric sort rather than alphabetical,
     // so FWC1–FWC19 shows correctly instead of FWC1–FWC9
@@ -90,18 +92,19 @@ router.get('/teams', async (req, res) => {
 // GET /api/stickers/me/duplicates
 // ----------------------------------------------------------------
 router.get('/me/duplicates', requireAuth, async (req, res) => {
+  const { albumId = 1 } = req.query;
   try {
     const { rows } = await pool.query(
       `SELECT ud.id, ud.quantity, s.id AS sticker_id, s.sticker_number, s.description, s.team_name, s.is_shiny
        FROM user_duplicates ud
        JOIN stickers s ON s.id = ud.sticker_id
-       WHERE ud.user_id = $1
+       WHERE ud.user_id = $1 AND s.album_id = $2
        ORDER BY
          s.team_name,
          regexp_replace(s.sticker_number, '[^0-9]', '', 'g') = '' DESC,
          CAST(NULLIF(regexp_replace(s.sticker_number, '[^0-9]', '', 'g'), '') AS INTEGER) ASC,
          s.sticker_number ASC`,
-      [req.user.id]
+      [req.user.id, albumId]
     );
     res.json(rows);
   } catch (err) {
@@ -203,14 +206,15 @@ router.delete('/me/duplicates/:stickerId', requireAuth, async (req, res) => {
 // GET /api/stickers/me/needs
 // ----------------------------------------------------------------
 router.get('/me/needs', requireAuth, async (req, res) => {
+  const { albumId = 1 } = req.query;
   try {
     const { rows } = await pool.query(
       `SELECT un.id, s.id AS sticker_id, s.sticker_number, s.description, s.team_name, s.is_shiny
        FROM user_needs un
        JOIN stickers s ON s.id = un.sticker_id
-       WHERE un.user_id = $1
+       WHERE un.user_id = $1 AND s.album_id = $2
        ORDER BY s.sticker_number`,
-      [req.user.id]
+      [req.user.id, albumId]
     );
     res.json(rows);
   } catch (err) {
@@ -326,21 +330,25 @@ router.post('/me/needs/bulk', requireAuth, async (req, res) => {
 // ----------------------------------------------------------------
 router.delete('/me/all', requireAuth, async (req, res) => {
   const userId = req.user.id;
+  const { albumId = 1 } = req.query;
   try {
     const { rows: deletedDuplicates } = await pool.query(
       `DELETE FROM user_duplicates
        WHERE user_id = $1
+         AND sticker_id IN (SELECT id FROM stickers WHERE album_id = $2)
          AND sticker_id NOT IN (
            SELECT si.sticker_id FROM swap_items si
            JOIN swaps s ON s.id = si.swap_id
            WHERE si.from_user_id = $1 AND s.status IN ('proposed', 'accepted', 'posted')
          )
        RETURNING sticker_id`,
-      [userId]
+      [userId, albumId]
     );
     const { rows: deletedNeeds } = await pool.query(
-      `DELETE FROM user_needs WHERE user_id = $1 RETURNING sticker_id`,
-      [userId]
+      `DELETE FROM user_needs
+       WHERE user_id = $1 AND sticker_id IN (SELECT id FROM stickers WHERE album_id = $2)
+       RETURNING sticker_id`,
+      [userId, albumId]
     );
     res.json({
       success: true,

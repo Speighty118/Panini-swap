@@ -23,7 +23,7 @@ the placeholder rows from seed_stickers.sql for album_id = 1).
 import re
 import sys
 
-CODE_PATTERN = re.compile(r'^([A-Z]{2,4}\d{1,2}|\d{1,2})\s+(.*)$')
+CODE_PATTERN = re.compile(r'^([A-Z]{2,4}\d{1,2}|\d{1,3})\s+(.*)$')
 
 def parse_line(line):
     line = line.strip()

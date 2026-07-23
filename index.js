@@ -17,6 +17,7 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 
 const authRoutes = require('./api/auth');
+const albumRoutes = require('./api/albums');
 const stickerRoutes = require('./api/stickers');
 const swapRoutes = require('./api/swaps');
 const ratingRoutes = require('./api/ratings');
@@ -138,6 +139,7 @@ app.use(generalLimiter);
 
 // ---- Routes ----
 app.use('/api/auth', authLimiter, authRoutes);
+app.use('/api/albums', albumRoutes);
 app.use('/api/stickers', stickerRoutes);
 app.use('/api/swaps', swapRoutes);
 app.use('/api/swaps/:swapId/messages', messageRoutes);

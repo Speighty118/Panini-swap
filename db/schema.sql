@@ -62,6 +62,7 @@ CREATE TABLE swaps (
     id              SERIAL PRIMARY KEY,
     user_a_id       INTEGER NOT NULL REFERENCES users(id),
     user_b_id       INTEGER NOT NULL REFERENCES users(id),
+    album_id        INTEGER NOT NULL REFERENCES albums(id),
     status          VARCHAR(20) NOT NULL DEFAULT 'proposed',
                     -- proposed -> accepted -> posted_a / posted_b -> completed -> rated
                     -- can also be: declined, cancelled, disputed

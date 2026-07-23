@@ -41,9 +41,9 @@ router.get('/preview/:matchId', async (req, res) => {
 
     const { rows: allItems } = await pool.query(
       `SELECT gi.*, s.sticker_number, s.description, s.team_name
-       FROM get_swap_proposal($1, $2, 5) gi
+       FROM get_swap_proposal($1, $2, 5, $3) gi
        JOIN stickers s ON s.id = gi.sticker_id`,
-      [match.user_a_id, match.user_b_id]
+      [match.user_a_id, match.user_b_id, match.album_id]
     );
 
     const aToB = allItems.filter(i => i.from_user_id === match.user_a_id);
@@ -202,6 +202,7 @@ router.get('/stats/:userId', async (req, res) => {
 
 router.get('/matches', async (req, res) => {
   const userId = req.user.id;
+  const { albumId = 1 } = req.query;
   try {
     const { rows } = await pool.query(
       `SELECT m.*,
@@ -221,10 +222,11 @@ router.get('/matches', async (req, res) => {
        JOIN users me ON me.id = $1
        WHERE (m.user_a_id = $1 OR m.user_b_id = $1)
          AND m.status = 'pending'
+         AND m.album_id = $2
          AND COALESCE(me.matching_paused, FALSE) = FALSE
          AND COALESCE(u.matching_paused, FALSE) = FALSE
        ORDER BY m.computed_at DESC`,
-      [userId]
+      [userId, albumId]
     );
 
     // Flag matches where some of the stock either side would give is already
@@ -235,12 +237,12 @@ router.get('/matches', async (req, res) => {
     for (const m of rows) {
       const { rows: conflictRows } = await pool.query(
         `SELECT 1
-         FROM get_swap_proposal($1, $2, 5) gi
+         FROM get_swap_proposal($1, $2, 5, $3) gi
          JOIN swap_items si ON si.sticker_id = gi.sticker_id AND si.from_user_id = gi.from_user_id
          JOIN swaps s ON s.id = si.swap_id
          WHERE s.status IN ('proposed', 'accepted', 'posted')
          LIMIT 1`,
-        [m.user_a_id, m.user_b_id]
+        [m.user_a_id, m.user_b_id, m.album_id]
       );
       m.has_conflict = conflictRows.length > 0;
     }
@@ -258,6 +260,7 @@ router.get('/matches', async (req, res) => {
 // ----------------------------------------------------------------
 router.get('/history', async (req, res) => {
   const userId = req.user.id;
+  const { albumId = 1 } = req.query;
   try {
     const { rows } = await pool.query(
       `SELECT s.*,
@@ -270,8 +273,9 @@ router.get('/history', async (req, res) => {
        LEFT JOIN ratings r ON r.swap_id = s.id AND r.rater_id = $1
        WHERE (s.user_a_id = $1 OR s.user_b_id = $1)
          AND s.status IN ('completed', 'declined')
+         AND s.album_id = $2
        ORDER BY s.updated_at DESC`,
-      [userId]
+      [userId, albumId]
     );
     res.json(rows);
   } catch (err) {
@@ -288,6 +292,7 @@ router.get('/history', async (req, res) => {
 // ----------------------------------------------------------------
 router.get('/mine', async (req, res) => {
   const userId = req.user.id;
+  const { albumId = 1 } = req.query;
   try {
     const { rows } = await pool.query(
       `SELECT s.*,
@@ -304,9 +309,10 @@ router.get('/mine', async (req, res) => {
               END AS display_get_count
        FROM swaps s
        JOIN users u ON u.id = CASE WHEN s.user_a_id = $1 THEN s.user_b_id ELSE s.user_a_id END
-       WHERE s.user_a_id = $1 OR s.user_b_id = $1
+       WHERE (s.user_a_id = $1 OR s.user_b_id = $1)
+         AND s.album_id = $2
        ORDER BY s.updated_at DESC`,
-      [userId]
+      [userId, albumId]
     );
     res.json(rows);
   } catch (err) {
@@ -357,8 +363,8 @@ router.post('/', async (req, res) => {
 
     // Get the current sticker list
     const { rows: allItems } = await client.query(
-      `SELECT * FROM get_swap_proposal($1, $2, 5)`,
-      [match.user_a_id, match.user_b_id]
+      `SELECT * FROM get_swap_proposal($1, $2, 5, $3)`,
+      [match.user_a_id, match.user_b_id, match.album_id]
     );
     const aToB = allItems.filter(i => i.from_user_id === match.user_a_id);
     const bToA = allItems.filter(i => i.from_user_id === match.user_b_id);
@@ -377,10 +383,10 @@ router.post('/', async (req, res) => {
 
     // Create the swap record with predicted count for display
     const { rows: swapRows } = await client.query(
-      `INSERT INTO swaps (user_a_id, user_b_id, status, predicted_count)
-       VALUES ($1, $2, 'proposed', $3)
+      `INSERT INTO swaps (user_a_id, user_b_id, album_id, status, predicted_count)
+       VALUES ($1, $2, $3, 'proposed', $4)
        RETURNING *`,
-      [match.user_a_id, match.user_b_id, equalCount]
+      [match.user_a_id, match.user_b_id, match.album_id, equalCount]
     );
     const swap = swapRows[0];
 

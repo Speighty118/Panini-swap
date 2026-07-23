@@ -4,9 +4,10 @@
  * Run on a schedule (e.g. every 5 minutes via cron, or a queue worker)
  * rather than computing matches live on each page load.
  *
- * What it does:
- *   1. Calls find_matches(3) — the SQL function that finds user pairs
- *      where each side can give >= 3 stickers the other needs.
+ * What it does, once per album:
+ *   1. Calls find_matches(3, albumId) — the SQL function that finds user
+ *      pairs where each side can give >= 3 stickers the other needs,
+ *      scoped to that one album.
  *   2. Upserts results into the `matches` table.
  *   3. Marks any previously-pending match that's no longer in the
  *      current result set as 'stale' (e.g. someone's inventory changed
@@ -28,16 +29,13 @@ async function runMatchingJob() {
   const client = await pool.connect();
   const startedAt = Date.now();
   const newMatches = []; // brand-new pairs found this run, notified after commit
+  let totalActive = 0;
+  let totalStale = 0;
 
   try {
     await client.query('BEGIN');
 
-    const { rows: currentMatches } = await client.query(
-      'SELECT * FROM find_matches($1)',
-      [MIN_MATCH]
-    );
-
-    console.log(`Found ${currentMatches.length} candidate pairs.`);
+    const { rows: albums } = await client.query('SELECT id FROM albums ORDER BY id');
 
     // Feature: pause matching. Deliberately filtered here in JS rather
     // than inside find_matches() itself — keeps the matching SQL
@@ -54,72 +52,90 @@ async function runMatchingJob() {
     } catch (pauseErr) {
       console.error('Could not check paused users (continuing without pause filter):', pauseErr.message);
     }
-    const activeMatches = currentMatches.filter(
-      m => !pausedIds.has(m.user_a) && !pausedIds.has(m.user_b)
-    );
-    if (pausedIds.size > 0) {
-      console.log(`Skipping ${currentMatches.length - activeMatches.length} pair(s) involving ${pausedIds.size} paused user(s).`);
-    }
 
-    const seenPairs = new Set();
-
-    for (const m of activeMatches) {
-      const key = `${m.user_a}-${m.user_b}`;
-      seenPairs.add(key);
-
-      // RETURNING (xmax = 0) is the standard Postgres way to tell an
-      // upsert's INSERT branch apart from its UPDATE branch — lets us
-      // notify only on genuinely brand-new pairs, not every refresh of
-      // an existing match's counts (which happens on every run).
-      const { rows: upserted } = await client.query(
-        `INSERT INTO matches (user_a_id, user_b_id, a_gives_b_count, b_gives_a_count, status, computed_at)
-         VALUES ($1, $2, $3, $4, 'pending', NOW())
-         ON CONFLICT (user_a_id, user_b_id)
-         DO UPDATE SET
-           a_gives_b_count = EXCLUDED.a_gives_b_count,
-           b_gives_a_count = EXCLUDED.b_gives_a_count,
-           computed_at = NOW(),
-           status = CASE
-             WHEN matches.status = 'stale' THEN 'pending'
-             -- Reactivate a previously-proposed match only if its swap
-             -- has since been declined or completed (not still active).
-             WHEN matches.status = 'proposed' AND NOT EXISTS (
-               SELECT 1 FROM swaps s
-               WHERE ((s.user_a_id = $1 AND s.user_b_id = $2)
-                   OR (s.user_a_id = $2 AND s.user_b_id = $1))
-               AND s.status IN ('proposed', 'accepted', 'posted')
-             ) THEN 'pending'
-             ELSE matches.status
-           END
-         RETURNING (xmax = 0) AS is_new_pair`,
-        [m.user_a, m.user_b, m.a_gives_b_count, m.b_gives_a_count]
+    // Run matching separately per album — each album's matches, staleness,
+    // and swap-reactivation checks are independent of every other album's.
+    for (const { id: albumId } of albums) {
+      const { rows: currentMatches } = await client.query(
+        'SELECT * FROM find_matches($1, $2)',
+        [MIN_MATCH, albumId]
       );
 
-      if (upserted[0]?.is_new_pair && Math.min(m.a_gives_b_count, m.b_gives_a_count) >= MIN_NOTIFY) {
-        newMatches.push(m);
-      }
-    }
+      console.log(`Album ${albumId}: found ${currentMatches.length} candidate pairs.`);
 
-    // Mark stale: pending matches not in this run's results anymore
-    // (their inventories changed enough to drop below threshold).
-    // We don't touch 'proposed' matches — those already became real swaps.
-    const { rows: existingPending } = await client.query(
-      `SELECT user_a_id, user_b_id FROM matches WHERE status = 'pending'`
-    );
-
-    const staleIds = [];
-    for (const row of existingPending) {
-      const key = `${row.user_a_id}-${row.user_b_id}`;
-      if (!seenPairs.has(key)) {
-        staleIds.push([row.user_a_id, row.user_b_id]);
-      }
-    }
-
-    for (const [a, b] of staleIds) {
-      await client.query(
-        `UPDATE matches SET status = 'stale' WHERE user_a_id = $1 AND user_b_id = $2`,
-        [a, b]
+      const activeMatches = currentMatches.filter(
+        m => !pausedIds.has(m.user_a) && !pausedIds.has(m.user_b)
       );
+      if (pausedIds.size > 0) {
+        console.log(`Album ${albumId}: skipping ${currentMatches.length - activeMatches.length} pair(s) involving paused user(s).`);
+      }
+
+      const seenPairs = new Set();
+
+      for (const m of activeMatches) {
+        const key = `${m.user_a}-${m.user_b}`;
+        seenPairs.add(key);
+
+        // RETURNING (xmax = 0) is the standard Postgres way to tell an
+        // upsert's INSERT branch apart from its UPDATE branch — lets us
+        // notify only on genuinely brand-new pairs, not every refresh of
+        // an existing match's counts (which happens on every run).
+        const { rows: upserted } = await client.query(
+          `INSERT INTO matches (user_a_id, user_b_id, album_id, a_gives_b_count, b_gives_a_count, status, computed_at)
+           VALUES ($1, $2, $3, $4, $5, 'pending', NOW())
+           ON CONFLICT (user_a_id, user_b_id, album_id)
+           DO UPDATE SET
+             a_gives_b_count = EXCLUDED.a_gives_b_count,
+             b_gives_a_count = EXCLUDED.b_gives_a_count,
+             computed_at = NOW(),
+             status = CASE
+               WHEN matches.status = 'stale' THEN 'pending'
+               -- Reactivate a previously-proposed match only if its swap
+               -- (in this same album) has since been declined or completed
+               -- (not still active).
+               WHEN matches.status = 'proposed' AND NOT EXISTS (
+                 SELECT 1 FROM swaps s
+                 WHERE ((s.user_a_id = $1 AND s.user_b_id = $2)
+                     OR (s.user_a_id = $2 AND s.user_b_id = $1))
+                 AND s.album_id = $3
+                 AND s.status IN ('proposed', 'accepted', 'posted')
+               ) THEN 'pending'
+               ELSE matches.status
+             END
+           RETURNING (xmax = 0) AS is_new_pair`,
+          [m.user_a, m.user_b, albumId, m.a_gives_b_count, m.b_gives_a_count]
+        );
+
+        if (upserted[0]?.is_new_pair && Math.min(m.a_gives_b_count, m.b_gives_a_count) >= MIN_NOTIFY) {
+          newMatches.push(m);
+        }
+      }
+
+      // Mark stale: pending matches in this album not in this run's results
+      // anymore (their inventories changed enough to drop below threshold).
+      // We don't touch 'proposed' matches — those already became real swaps.
+      const { rows: existingPending } = await client.query(
+        `SELECT user_a_id, user_b_id FROM matches WHERE status = 'pending' AND album_id = $1`,
+        [albumId]
+      );
+
+      const staleIds = [];
+      for (const row of existingPending) {
+        const key = `${row.user_a_id}-${row.user_b_id}`;
+        if (!seenPairs.has(key)) {
+          staleIds.push([row.user_a_id, row.user_b_id]);
+        }
+      }
+
+      for (const [a, b] of staleIds) {
+        await client.query(
+          `UPDATE matches SET status = 'stale' WHERE user_a_id = $1 AND user_b_id = $2 AND album_id = $3`,
+          [a, b, albumId]
+        );
+      }
+
+      totalActive += currentMatches.length;
+      totalStale += staleIds.length;
     }
 
     await client.query('COMMIT');
@@ -184,7 +200,7 @@ async function runMatchingJob() {
 
     const duration = Date.now() - startedAt;
     console.log(
-      `Matching job complete: ${currentMatches.length} active, ${staleIds.length} marked stale. (${duration}ms)`
+      `Matching job complete: ${totalActive} active, ${totalStale} marked stale. (${duration}ms)`
     );
   } catch (err) {
     await client.query('ROLLBACK');
