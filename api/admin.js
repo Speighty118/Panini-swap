@@ -1568,38 +1568,19 @@ router.post('/test-push', async (req, res) => {
   }
 });
 
-// GET /api/admin/app-survey
-// Returns app-interest survey results + PWA install stats for the admin dashboard.
+// GET /api/admin/pwa-stats
+// Returns PWA install + push subscriber stats for the admin dashboard.
 // ----------------------------------------------------------------
-router.get('/app-survey', async (req, res) => {
+router.get('/pwa-stats', async (req, res) => {
   try {
-    const [survey, phoneOs, installs, pushSubs, installUsers, pushUsers] = await Promise.all([
-      pool.query(`SELECT wants_app, COUNT(*) AS count FROM app_interest_survey GROUP BY wants_app`),
-      pool.query(`SELECT phone_os, COUNT(*) AS count FROM app_interest_survey GROUP BY phone_os ORDER BY count DESC`),
+    const [installs, pushSubs, installUsers, pushUsers] = await Promise.all([
       pool.query(`SELECT COUNT(*) FROM users WHERE pwa_installed_at IS NOT NULL`),
       pool.query(`SELECT COUNT(*) FROM users WHERE push_subscription IS NOT NULL`),
       pool.query(`SELECT name, email, pwa_installed_at FROM users WHERE pwa_installed_at IS NOT NULL ORDER BY pwa_installed_at DESC`),
       pool.query(`SELECT name, email FROM users WHERE push_subscription IS NOT NULL ORDER BY name ASC`),
     ]);
 
-    const totalResponses = survey.rows.reduce((sum, r) => sum + parseInt(r.count, 10), 0);
-    const yesCount = parseInt(survey.rows.find(r => r.wants_app === true)?.count || 0, 10);
-    const noCount = parseInt(survey.rows.find(r => r.wants_app === false)?.count || 0, 10);
-    const PHONE_LABELS = { ios: 'iPhone (iOS)', android: 'Android', neither: 'Neither' };
-
     res.json({
-      totalResponses,
-      wantsApp: {
-        yes: yesCount,
-        no: noCount,
-        yesPct: totalResponses > 0 ? Math.round((yesCount / totalResponses) * 100) : 0,
-      },
-      phoneOs: phoneOs.rows.map(r => ({
-        key: r.phone_os,
-        label: PHONE_LABELS[r.phone_os] || r.phone_os,
-        count: parseInt(r.count, 10),
-        pct: totalResponses > 0 ? Math.round((parseInt(r.count, 10) / totalResponses) * 100) : 0,
-      })),
       pwaInstalls: parseInt(installs.rows[0].count),
       pushSubscribers: parseInt(pushSubs.rows[0].count),
       installUsers: installUsers.rows,
