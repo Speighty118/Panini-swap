@@ -558,4 +558,78 @@ router.put('/me', requireAuth, async (req, res) => {
   }
 });
 
+// ----------------------------------------------------------------
+// DELETE /api/auth/me
+// Deletes the logged-in user's account. Anonymizes personal data and
+// deactivates the account rather than removing the row outright —
+// swap partners' history (completed swaps, ratings) needs this row
+// to still exist to resolve correctly. Required for App Store
+// compliance (Guideline 5.1.1(v)): users must be able to delete their
+// account and personal data from within the app.
+// ----------------------------------------------------------------
+router.delete('/me', requireAuth, async (req, res) => {
+  const userId = req.user.id;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const anonymizedEmail = `deleted-user-${userId}@deleted.gotonespare.com`;
+
+    await client.query(
+      `UPDATE users
+       SET name = 'Deleted user',
+           email = $1,
+           password_hash = NULL,
+           facebook_id = NULL,
+           address_line1 = NULL,
+           address_line2 = NULL,
+           city = NULL,
+           postcode = NULL,
+           postcode_latitude = NULL,
+           postcode_longitude = NULL,
+           profile_photo = NULL,
+           push_subscription = NULL,
+           is_active = FALSE
+       WHERE id = $2`,
+      [anonymizedEmail, userId]
+    );
+
+    // Decline any swaps still awaiting proposal so the other side isn't
+    // left hanging. Leaves accepted/posted swaps untouched — stickers may
+    // already be in the post, and the other party's records should stand.
+    const { rows: declinedSwaps } = await client.query(
+      `UPDATE swaps
+       SET status = 'declined', updated_at = NOW(),
+           declined_by_id = $1, decline_reason = 'Account deleted'
+       WHERE (user_a_id = $1 OR user_b_id = $1) AND status = 'proposed'
+       RETURNING id, user_a_id, user_b_id`,
+      [userId]
+    );
+    for (const swap of declinedSwaps) {
+      const otherUserId = swap.user_a_id === userId ? swap.user_b_id : swap.user_a_id;
+      await client.query(
+        `INSERT INTO notifications (user_id, type, title, body)
+         VALUES ($1, 'swap_declined', 'Swap declined', 'The other collector deleted their account, so this swap has been declined.')`,
+        [otherUserId]
+      ).catch(() => {});
+    }
+
+    // Mark their pending matches as stale so they stop surfacing to the other side
+    await client.query(
+      `UPDATE matches SET status = 'stale'
+       WHERE (user_a_id = $1 OR user_b_id = $1) AND status = 'pending'`,
+      [userId]
+    );
+
+    await client.query('COMMIT');
+    res.json({ success: true });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('Account deletion error:', err.message);
+    res.status(500).json({ error: 'Failed to delete account' });
+  } finally {
+    client.release();
+  }
+});
+
 module.exports = router;
