@@ -35,6 +35,7 @@ const pushRoutes = require('./api/push');
 const messagingRoutes = require('./api/messaging');
 const ambassadorRoutes = require('./api/ambassador');
 const founderRoutes = require('./api/founder');
+const revenuecatRoutes = require('./api/revenuecat');
 const pl2026Routes = require('./api/pl2026');
 const { runMatchingJob } = require('./jobs/run_matching');
 
@@ -155,6 +156,7 @@ app.use('/api/push', pushRoutes);
 app.use('/api/messages', messagingRoutes);
 app.use('/api/ambassador', ambassadorRoutes);
 app.use('/api/founder', founderRoutes);
+app.use('/api/revenuecat', revenuecatRoutes);
 app.use('/api/pl2026', pl2026Routes);
 app.use('/api/admin', adminRoutes);
 
