@@ -1,6 +1,6 @@
 /**
- * RevenueCat webhook — grants Founder membership when the iOS in-app
- * purchase (com.gotonespare.app.founder) completes.
+ * RevenueCat webhook — grants Founder membership when the iOS or Android
+ * in-app purchase completes.
  *
  * IMPORTANT — env var needed in Railway:
  *   REVENUECAT_WEBHOOK_SECRET  - shared secret configured as the
@@ -21,7 +21,7 @@ const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const { sendFounderWelcomeEmail } = require('./email');
 const { createNotification } = require('./notifications');
 
-const FOUNDER_PRODUCT_ID = 'com.gotonespare.app.founder';
+const FOUNDER_PRODUCT_IDS = ['com.gotonespare.app.founder', 'founder_membership'];
 const FOUNDER_PURCHASE_EVENT_TYPES = ['INITIAL_PURCHASE', 'NON_RENEWING_PURCHASE'];
 
 router.post('/webhook', async (req, res) => {
@@ -31,7 +31,7 @@ router.post('/webhook', async (req, res) => {
   }
 
   const event = req.body?.event;
-  if (!event || !FOUNDER_PURCHASE_EVENT_TYPES.includes(event.type) || event.product_id !== FOUNDER_PRODUCT_ID) {
+  if (!event || !FOUNDER_PURCHASE_EVENT_TYPES.includes(event.type) || !FOUNDER_PRODUCT_IDS.includes(event.product_id)) {
     return res.json({ received: true });
   }
 
