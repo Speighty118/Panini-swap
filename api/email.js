@@ -81,7 +81,7 @@ async function sendPasswordResetEmail(toEmail, name, resetUrl) {
   });
 }
 
-module.exports = { sendVerificationEmail, sendDisputeNotification, sendPasswordResetEmail, sendSwapProposedEmail, sendSwapAcceptedEmail, sendSwapPostedEmail, sendSwapReceivedEmail, sendSwapReminderEmail, sendFounderWelcomeEmail };
+module.exports = { sendVerificationEmail, sendDisputeNotification, sendPasswordResetEmail, sendSwapProposedEmail, sendSwapAcceptedEmail, sendSwapPostedEmail, sendSwapReceivedEmail, sendSwapReminderEmail, sendFounderWelcomeEmail, sendAppLaunchEmail };
 
 const SITE_URL = process.env.FRONTEND_URL || 'https://www.gotonespare.com';
 
@@ -216,6 +216,20 @@ async function sendFounderWelcomeEmail(toEmail, name) {
       </div>
       <p style="color: #444; line-height: 1.6;">Core swapping, matching and messaging will always stay completely free for everyone — your support just helps keep it that way.</p>
       ${ctaButton('View your profile →', `${SITE_URL}`)}
+    `),
+  });
+}
+
+async function sendAppLaunchEmail(toEmail, name) {
+  return resend.emails.send({
+    from: FROM_EMAIL,
+    to: toEmail,
+    subject: '📱 The Got One Spare app is here!',
+    html: emailWrapper(`
+      <h2 style="color: #0B1120; font-size: 20px; margin: 0 0 16px;">📱 We're live on iOS and Android!</h2>
+      <p style="color: #444; line-height: 1.6; margin: 0 0 12px;">Hi ${name},</p>
+      <p style="color: #444; line-height: 1.6; margin: 0 0 16px;">You asked us to let you know — the Got One Spare app is now available to download, with instant push notifications for matches, swaps, and messages.</p>
+      ${ctaButton('Get the app →', `${SITE_URL}`)}
     `),
   });
 }

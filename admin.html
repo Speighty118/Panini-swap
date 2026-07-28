@@ -480,6 +480,23 @@
     </div>
   </div>
 
+  <!-- APP LAUNCH INTEREST -->
+  <div id="panel-app-launch" class="panel">
+    <div class="card">
+      <div class="card-header">
+        <h2>📱 App launch interest</h2>
+        <span id="appLaunchCount" style="font-size:13px;color:#6B7280"></span>
+      </div>
+      <p style="padding:10px 18px 0;font-size:13px;color:#6B7280;margin:0">
+        People who clicked "Notify me" on the web app's coming-soon banner. Once the iOS/Android apps are live, send everyone below a launch email — this also clears the list.
+      </p>
+      <div style="padding:14px 18px">
+        <button class="btn-small" onclick="sendAppLaunchAnnouncement()" id="appLaunchSendBtn">Send launch email to everyone below</button>
+      </div>
+      <div id="appLaunchList"></div>
+    </div>
+  </div>
+
   <!-- FEEDBACK -->
   <div id="panel-feedback" class="panel">
     <div class="card" style="margin-bottom:16px">
@@ -552,7 +569,8 @@
       <button onclick="showTab('moderation')" style="display:flex;align-items:center;gap:12px;width:100%;padding:14px;background:none;border:none;border-bottom:1px solid #f0f0f0;font-family:inherit;font-size:14px;font-weight:600;color:#0B1120;text-align:left;cursor:pointer">🛡 Moderation</button>
       <button onclick="showTab('invites')" style="display:flex;align-items:center;gap:12px;width:100%;padding:14px;background:none;border:none;border-bottom:1px solid #f0f0f0;font-family:inherit;font-size:14px;font-weight:600;color:#0B1120;text-align:left;cursor:pointer">🎟 Invite Codes</button>
       <button onclick="showTab('feedback')" style="display:flex;align-items:center;gap:12px;width:100%;padding:14px;background:none;border:none;border-bottom:1px solid #f0f0f0;font-family:inherit;font-size:14px;font-weight:600;color:#0B1120;text-align:left;cursor:pointer">💬 Feedback</button>
-      <button onclick="showTab('donations')" style="display:flex;align-items:center;gap:12px;width:100%;padding:14px;background:none;border:none;font-family:inherit;font-size:14px;font-weight:600;color:#0B1120;text-align:left;cursor:pointer">🏆 Founder clicks</button>
+      <button onclick="showTab('donations')" style="display:flex;align-items:center;gap:12px;width:100%;padding:14px;background:none;border:none;border-bottom:1px solid #f0f0f0;font-family:inherit;font-size:14px;font-weight:600;color:#0B1120;text-align:left;cursor:pointer">🏆 Founder clicks</button>
+      <button onclick="showTab('app-launch')" style="display:flex;align-items:center;gap:12px;width:100%;padding:14px;background:none;border:none;font-family:inherit;font-size:14px;font-weight:600;color:#0B1120;text-align:left;cursor:pointer">📱 App launch interest</button>
     </div>
   </div>
 </div>
@@ -572,19 +590,20 @@ let allUsers = [];
 let modCases = [];
 
 function showTab(name) {
-  const allPanels = ['overview','analytics','users','swaps','messages','moderation','invites','feedback','donations','more'];
+  const allPanels = ['overview','analytics','users','swaps','messages','moderation','invites','feedback','donations','app-launch','more'];
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   const panel = document.getElementById('panel-' + name);
   if (panel) panel.classList.add('active');
 
   // Update bottom nav active state
-  const navMap = { overview: 0, users: 1, swaps: 2, messages: 3, more: 4, analytics: 4, moderation: 4, invites: 4, feedback: 4, donations: 4 };
+  const navMap = { overview: 0, users: 1, swaps: 2, messages: 3, more: 4, analytics: 4, moderation: 4, invites: 4, feedback: 4, donations: 4, 'app-launch': 4 };
   document.querySelectorAll('.nav-item').forEach((item, i) => {
     item.classList.toggle('active', i === navMap[name]);
   });
 
   if (name === 'swaps') loadSwaps();
   if (name === 'donations') loadDonations();
+  if (name === 'app-launch') loadAppLaunch();
   if (name === 'moderation') { loadModerationCases(); loadActionLog(); }
   if (name === 'messages') loadAdminMessages();
   if (name === 'ambassador') loadAmbassador();
@@ -970,6 +989,40 @@ async function loadDonations() {
       </tbody></table></div>`;
   } catch(err) {
     document.getElementById('donationsList').innerHTML = `<div class="empty">Error: ${err.message}</div>`;
+  }
+}
+
+async function loadAppLaunch() {
+  try {
+    const items = await adminFetch('/app-launch/admin/list');
+    document.getElementById('appLaunchCount').textContent = `${items.length} waiting`;
+    document.getElementById('appLaunchSendBtn').disabled = !items.length;
+    const el = document.getElementById('appLaunchList');
+    if (!items.length) { el.innerHTML = '<div class="empty">No one waiting yet.</div>'; return; }
+
+    el.innerHTML = `<div class="table-wrap"><table>
+      <thead><tr><th>Name</th><th>Email</th></tr></thead>
+      <tbody>${items.map(u => `<tr>
+        <td>${e(u.name)}</td>
+        <td>${e(u.email)}</td>
+      </tr>`).join('')}
+      </tbody></table></div>`;
+  } catch(err) {
+    document.getElementById('appLaunchList').innerHTML = `<div class="empty">Error: ${err.message}</div>`;
+  }
+}
+
+async function sendAppLaunchAnnouncement() {
+  if (!confirm('Send the launch email to everyone on this list? This clears the list afterwards.')) return;
+  const btn = document.getElementById('appLaunchSendBtn');
+  btn.disabled = true; btn.textContent = 'Sending...';
+  try {
+    const res = await adminFetch('/app-launch/admin/announce-launch', { method: 'POST' });
+    btn.textContent = `Sent to ${res.notified} of ${res.total}`;
+    loadAppLaunch();
+  } catch(err) {
+    alert('Error: ' + err.message);
+    btn.disabled = false; btn.textContent = 'Send launch email to everyone below';
   }
 }
 
