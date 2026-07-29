@@ -38,6 +38,7 @@ const founderRoutes = require('./api/founder');
 const revenuecatRoutes = require('./api/revenuecat');
 const pl2026Routes = require('./api/pl2026');
 const appLaunchRoutes = require('./api/app_launch');
+const androidTestersRoutes = require('./api/android_testers');
 const { runMatchingJob } = require('./jobs/run_matching');
 
 const app = express();
@@ -85,7 +86,7 @@ const restrictedCors = cors({
 // Admin-accessible routes (admin.html is a local file with null origin,
 // so these need permissive CORS — all are protected by their own auth).
 const adminCors = cors({ origin: '*' });
-const ADMIN_PATHS = ['/api/admin', '/api/invites', '/api/feedback', '/api/donations', '/api/reports', '/api/announcements', '/api/ambassador/admin', '/api/founder/admin', '/api/pl2026/admin', '/api/app-launch/admin'];
+const ADMIN_PATHS = ['/api/admin', '/api/invites', '/api/feedback', '/api/donations', '/api/reports', '/api/announcements', '/api/ambassador/admin', '/api/founder/admin', '/api/pl2026/admin', '/api/app-launch/admin', '/api/android-testers/admin'];
 
 ADMIN_PATHS.forEach(path => app.use(path, adminCors));
 
@@ -160,6 +161,7 @@ app.use('/api/founder', founderRoutes);
 app.use('/api/revenuecat', revenuecatRoutes);
 app.use('/api/pl2026', pl2026Routes);
 app.use('/api/app-launch', appLaunchRoutes);
+app.use('/api/android-testers', androidTestersRoutes);
 app.use('/api/admin', adminRoutes);
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));

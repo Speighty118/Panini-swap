@@ -497,6 +497,20 @@
     </div>
   </div>
 
+  <!-- ANDROID TESTERS -->
+  <div id="panel-android-testers" class="panel">
+    <div class="card">
+      <div class="card-header">
+        <h2>🧪 Android tester volunteers</h2>
+        <span id="androidTestersCount" style="font-size:13px;color:#6B7280"></span>
+      </div>
+      <p style="padding:10px 18px 0;font-size:13px;color:#6B7280;margin:0">
+        People who volunteered to closed-test the Android app. Copy their Google email into Play Console's tester list, then send them the opt-in link — Google only counts testers once they actually click it.
+      </p>
+      <div id="androidTestersList"></div>
+    </div>
+  </div>
+
   <!-- FEEDBACK -->
   <div id="panel-feedback" class="panel">
     <div class="card" style="margin-bottom:16px">
@@ -570,7 +584,8 @@
       <button onclick="showTab('invites')" style="display:flex;align-items:center;gap:12px;width:100%;padding:14px;background:none;border:none;border-bottom:1px solid #f0f0f0;font-family:inherit;font-size:14px;font-weight:600;color:#0B1120;text-align:left;cursor:pointer">🎟 Invite Codes</button>
       <button onclick="showTab('feedback')" style="display:flex;align-items:center;gap:12px;width:100%;padding:14px;background:none;border:none;border-bottom:1px solid #f0f0f0;font-family:inherit;font-size:14px;font-weight:600;color:#0B1120;text-align:left;cursor:pointer">💬 Feedback</button>
       <button onclick="showTab('donations')" style="display:flex;align-items:center;gap:12px;width:100%;padding:14px;background:none;border:none;border-bottom:1px solid #f0f0f0;font-family:inherit;font-size:14px;font-weight:600;color:#0B1120;text-align:left;cursor:pointer">🏆 Founder clicks</button>
-      <button onclick="showTab('app-launch')" style="display:flex;align-items:center;gap:12px;width:100%;padding:14px;background:none;border:none;font-family:inherit;font-size:14px;font-weight:600;color:#0B1120;text-align:left;cursor:pointer">📱 App launch interest</button>
+      <button onclick="showTab('app-launch')" style="display:flex;align-items:center;gap:12px;width:100%;padding:14px;background:none;border:none;border-bottom:1px solid #f0f0f0;font-family:inherit;font-size:14px;font-weight:600;color:#0B1120;text-align:left;cursor:pointer">📱 App launch interest</button>
+      <button onclick="showTab('android-testers')" style="display:flex;align-items:center;gap:12px;width:100%;padding:14px;background:none;border:none;font-family:inherit;font-size:14px;font-weight:600;color:#0B1120;text-align:left;cursor:pointer">🧪 Android testers</button>
     </div>
   </div>
 </div>
@@ -590,13 +605,13 @@ let allUsers = [];
 let modCases = [];
 
 function showTab(name) {
-  const allPanels = ['overview','analytics','users','swaps','messages','moderation','invites','feedback','donations','app-launch','more'];
+  const allPanels = ['overview','analytics','users','swaps','messages','moderation','invites','feedback','donations','app-launch','android-testers','more'];
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   const panel = document.getElementById('panel-' + name);
   if (panel) panel.classList.add('active');
 
   // Update bottom nav active state
-  const navMap = { overview: 0, users: 1, swaps: 2, messages: 3, more: 4, analytics: 4, moderation: 4, invites: 4, feedback: 4, donations: 4, 'app-launch': 4 };
+  const navMap = { overview: 0, users: 1, swaps: 2, messages: 3, more: 4, analytics: 4, moderation: 4, invites: 4, feedback: 4, donations: 4, 'app-launch': 4, 'android-testers': 4 };
   document.querySelectorAll('.nav-item').forEach((item, i) => {
     item.classList.toggle('active', i === navMap[name]);
   });
@@ -604,6 +619,7 @@ function showTab(name) {
   if (name === 'swaps') loadSwaps();
   if (name === 'donations') loadDonations();
   if (name === 'app-launch') loadAppLaunch();
+  if (name === 'android-testers') loadAndroidTesters();
   if (name === 'moderation') { loadModerationCases(); loadActionLog(); }
   if (name === 'messages') loadAdminMessages();
   if (name === 'ambassador') loadAmbassador();
@@ -1023,6 +1039,27 @@ async function sendAppLaunchAnnouncement() {
   } catch(err) {
     alert('Error: ' + err.message);
     btn.disabled = false; btn.textContent = 'Send launch email to everyone below';
+  }
+}
+
+async function loadAndroidTesters() {
+  try {
+    const items = await adminFetch('/android-testers/admin/list');
+    document.getElementById('androidTestersCount').textContent = `${items.length} of 20 volunteered`;
+    const el = document.getElementById('androidTestersList');
+    if (!items.length) { el.innerHTML = '<div class="empty">No volunteers yet.</div>'; return; }
+
+    el.innerHTML = `<div class="table-wrap"><table>
+      <thead><tr><th>Name</th><th>Account email</th><th>Google/Play email</th><th>Signed up</th></tr></thead>
+      <tbody>${items.map(t => `<tr>
+        <td>${e(t.name)}</td>
+        <td>${e(t.account_email)}</td>
+        <td><strong>${e(t.google_email)}</strong></td>
+        <td style="font-size:12px;color:#6B7280">${new Date(t.created_at).toLocaleString()}</td>
+      </tr>`).join('')}
+      </tbody></table></div>`;
+  } catch(err) {
+    document.getElementById('androidTestersList').innerHTML = `<div class="empty">Error: ${err.message}</div>`;
   }
 }
 
