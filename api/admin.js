@@ -1360,16 +1360,18 @@ router.get('/overview', async (req, res) => {
 // ----------------------------------------------------------------
 // POST /api/admin/broadcast
 // Send a notification to every active user at once.
-// Body: { title, body, type }
+// Body: { title, body, type, targetPlatform } — targetPlatform is
+// null/omitted for everyone, or 'android'/'ios'/'desktop' to restrict
+// to users whose last login came from that device type.
 // ----------------------------------------------------------------
 router.post('/broadcast', async (req, res) => {
-  const { title, body, type = 'announcement' } = req.body;
+  const { title, body, type = 'announcement', targetPlatform = null } = req.body;
   if (!title || !title.trim()) {
     return res.status(400).json({ error: 'title is required' });
   }
   try {
     const { sendBroadcastToAllUsers } = require('./broadcast');
-    const { sentCount, pushCount } = await sendBroadcastToAllUsers(pool, { title, body, type });
+    const { sentCount, pushCount } = await sendBroadcastToAllUsers(pool, { title, body, type, targetPlatform });
     console.log(`[BROADCAST] Push sent to ${pushCount} subscribers`);
     res.json({ sent: sentCount });
   } catch (err) {
@@ -1382,10 +1384,12 @@ router.post('/broadcast', async (req, res) => {
 // POST /api/admin/scheduled-announcements
 // Queue an announcement to be sent at a future date/time by the
 // send-scheduled-announcements cron job, instead of immediately.
-// Body: { title, body, sendAt } — sendAt is an ISO datetime string.
+// Body: { title, body, sendAt, targetPlatform } — sendAt is an ISO
+// datetime string; targetPlatform is null for everyone or
+// 'android'/'ios'/'desktop' to restrict the audience.
 // ----------------------------------------------------------------
 router.post('/scheduled-announcements', async (req, res) => {
-  const { title, body, sendAt } = req.body;
+  const { title, body, sendAt, targetPlatform = null } = req.body;
   if (!title || !title.trim()) {
     return res.status(400).json({ error: 'title is required' });
   }
@@ -1398,9 +1402,9 @@ router.post('/scheduled-announcements', async (req, res) => {
   }
   try {
     const { rows } = await pool.query(
-      `INSERT INTO scheduled_announcements (title, body, send_at)
-       VALUES ($1, $2, $3) RETURNING *`,
-      [title.trim(), body?.trim() || null, sendAtDate.toISOString()]
+      `INSERT INTO scheduled_announcements (title, body, send_at, target_platform)
+       VALUES ($1, $2, $3, $4) RETURNING *`,
+      [title.trim(), body?.trim() || null, sendAtDate.toISOString(), targetPlatform]
     );
     res.json(rows[0]);
   } catch (err) {

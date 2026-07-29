@@ -250,6 +250,15 @@
         <p style="font-size:13px;color:#6B7280;margin:0">Send immediately, or schedule for a future date/time — either way it goes to every active user's bell icon and push notification.</p>
         <input type="text" id="broadcastTitle" placeholder="Title (e.g. New features added!)" style="margin:0" />
         <textarea id="broadcastBody" placeholder="Optional message (e.g. You can now bulk add stickers by team — try it on your dashboard!)" rows="3" style="padding:10px 14px;border-radius:8px;border:1px solid rgba(0,0,0,0.12);font-size:13px;font-family:inherit;resize:vertical"></textarea>
+        <div style="display:flex;align-items:center;gap:8px">
+          <label style="font-size:13px;color:#6B7280">Audience:</label>
+          <select id="broadcastAudience" style="margin:0;width:auto;padding:6px 10px;border-radius:6px;border:1px solid rgba(0,0,0,0.12);font-size:13px;font-family:inherit">
+            <option value="">All users</option>
+            <option value="android">Android web visitors only</option>
+            <option value="ios">iOS web visitors only</option>
+            <option value="desktop">Desktop web visitors only</option>
+          </select>
+        </div>
         <div style="display:flex;gap:10px;align-items:center">
           <button class="btn-primary" onclick="sendBroadcast()">Send to all users</button>
           <button class="btn-small btn-secondary" onclick="testBroadcastPush()" style="margin-left:8px">🔔 Test push (to you only)</button>
@@ -689,16 +698,24 @@ async function refreshAll() {
   ]);
 }
 
+function audienceLabel(targetPlatform) {
+  if (targetPlatform === 'android') return 'Android web visitors';
+  if (targetPlatform === 'ios') return 'iOS web visitors';
+  if (targetPlatform === 'desktop') return 'Desktop web visitors';
+  return 'ALL active users';
+}
+
 async function sendBroadcast() {
   const title = document.getElementById('broadcastTitle').value.trim();
   const body = document.getElementById('broadcastBody').value.trim();
+  const targetPlatform = document.getElementById('broadcastAudience').value || null;
   const resultEl = document.getElementById('broadcastResult');
   if (!title) { alert('Please enter a title for the announcement.'); return; }
-  if (!confirm(`Send "${title}" to ALL active users? This will appear in everyone's notification bell immediately.`)) return;
+  if (!confirm(`Send "${title}" to ${audienceLabel(targetPlatform)}? This will appear in their notification bell immediately.`)) return;
   try {
     const { sent } = await adminFetch('/admin/broadcast', {
       method: 'POST',
-      body: JSON.stringify({ title, body, type: 'announcement' }),
+      body: JSON.stringify({ title, body, type: 'announcement', targetPlatform }),
     });
     resultEl.textContent = `✓ Sent to ${sent} users`;
     document.getElementById('broadcastTitle').value = '';
@@ -711,16 +728,17 @@ async function scheduleAnnouncement() {
   const title = document.getElementById('broadcastTitle').value.trim();
   const body = document.getElementById('broadcastBody').value.trim();
   const sendAtInput = document.getElementById('scheduleSendAt').value;
+  const targetPlatform = document.getElementById('broadcastAudience').value || null;
   const resultEl = document.getElementById('scheduleResult');
   if (!title) { alert('Please enter a title for the announcement.'); return; }
   if (!sendAtInput) { alert('Please pick a date and time to schedule for.'); return; }
   const sendAt = new Date(sendAtInput);
   if (sendAt.getTime() <= Date.now()) { alert('Please pick a time in the future.'); return; }
-  if (!confirm(`Schedule "${title}" to go out to ALL active users at ${sendAt.toLocaleString()}?`)) return;
+  if (!confirm(`Schedule "${title}" to go out to ${audienceLabel(targetPlatform)} at ${sendAt.toLocaleString()}?`)) return;
   try {
     await adminFetch('/admin/scheduled-announcements', {
       method: 'POST',
-      body: JSON.stringify({ title, body, sendAt: sendAt.toISOString() }),
+      body: JSON.stringify({ title, body, sendAt: sendAt.toISOString(), targetPlatform }),
     });
     resultEl.textContent = `✓ Scheduled for ${sendAt.toLocaleString()}`;
     document.getElementById('broadcastTitle').value = '';
@@ -745,6 +763,7 @@ async function loadScheduledAnnouncements() {
           <div style="font-size:12px;color:#6B7280">
             ${s.status === 'pending' ? 'Scheduled for' : s.status === 'sent' ? 'Sent at' : 'Cancelled — was scheduled for'}
             ${new Date(s.status === 'sent' && s.sent_at ? s.sent_at : s.send_at).toLocaleString()}
+            &middot; ${audienceLabel(s.target_platform)}
           </div>
         </div>
         ${s.status === 'pending' ? `<button class="btn-small btn-danger" onclick="cancelScheduledAnnouncement(${s.id})">Cancel</button>` : `<span style="font-size:12px;color:#9CA3AF;text-transform:capitalize">${s.status}</span>`}

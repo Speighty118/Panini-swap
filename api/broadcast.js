@@ -4,9 +4,11 @@
  * place so the two paths can't quietly drift apart.
  */
 
-async function sendBroadcastToAllUsers(pool, { title, body, type = 'announcement' }) {
+async function sendBroadcastToAllUsers(pool, { title, body, type = 'announcement', targetPlatform = null }) {
   const { rows: users } = await pool.query(
-    `SELECT id FROM users WHERE is_suspended = FALSE AND is_active = TRUE`
+    `SELECT id FROM users WHERE is_suspended = FALSE AND is_active = TRUE
+     AND ($1::varchar IS NULL OR device_type = $1)`,
+    [targetPlatform]
   );
   for (const user of users) {
     await pool.query(
@@ -16,10 +18,12 @@ async function sendBroadcastToAllUsers(pool, { title, body, type = 'announcement
     );
   }
 
-  // Push to all subscribed users — fire and forget
+  // Push to all subscribed users (within the target audience) — fire and forget
   const { sendPushNotification } = require('./push');
   const { rows: pushUsers } = await pool.query(
-    `SELECT id FROM users WHERE push_subscription IS NOT NULL`
+    `SELECT id FROM users WHERE push_subscription IS NOT NULL
+     AND ($1::varchar IS NULL OR device_type = $1)`,
+    [targetPlatform]
   );
   pushUsers.forEach(u => {
     sendPushNotification(u.id, {

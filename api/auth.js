@@ -276,6 +276,13 @@ router.post('/login', async (req, res) => {
       [user.id]
     ).catch(() => {});
 
+    // Classify device type from the User-Agent header on every login
+    // (unlike geo, this can legitimately change between logins) so
+    // admin broadcasts can be targeted at e.g. Android web visitors.
+    const ua = req.headers['user-agent'] || '';
+    const deviceType = /android/i.test(ua) ? 'android' : /iphone|ipad|ipod/i.test(ua) ? 'ios' : 'desktop';
+    pool.query(`UPDATE users SET device_type = $1 WHERE id = $2`, [deviceType, user.id]).catch(() => {});
+
     // Geolocate the IP on login — best-effort, never blocks the response.
     // Stored in geo_* columns, separate from the user's postal address fields.
     // Only updates if we don't already have geo data for this user.

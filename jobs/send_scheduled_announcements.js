@@ -21,6 +21,7 @@ async function sendScheduledAnnouncements() {
         title: announcement.title,
         body: announcement.body,
         type: 'announcement',
+        targetPlatform: announcement.target_platform,
       });
       await pool.query(
         `UPDATE scheduled_announcements SET status = 'sent', sent_at = NOW() WHERE id = $1`,
