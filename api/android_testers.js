@@ -85,7 +85,7 @@ function requireAdmin(req, res, next) {
 router.get('/admin/list', requireAdmin, async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT ats.id, ats.user_id, u.name, u.email AS account_email, ats.google_email, ats.created_at
+      `SELECT ats.id, ats.user_id, u.name, u.email AS account_email, ats.google_email, ats.created_at, ats.reminded_at
        FROM android_tester_signups ats
        JOIN users u ON u.id = ats.user_id
        ORDER BY ats.created_at ASC`
@@ -107,9 +107,10 @@ router.post('/admin/notify-check-email', requireAdmin, async (req, res) => {
       return res.status(400).json({ error: 'No testers selected' });
     }
 
-    // Only notify users who are actually on the tester list, not arbitrary ids.
+    // Only notify users who are actually on the tester list AND haven't
+    // already been reminded, not arbitrary ids and not a double-send.
     const { rows: valid } = await pool.query(
-      `SELECT user_id FROM android_tester_signups WHERE user_id = ANY($1::int[])`,
+      `SELECT user_id FROM android_tester_signups WHERE user_id = ANY($1::int[]) AND reminded_at IS NULL`,
       [userIds]
     );
 
@@ -124,6 +125,13 @@ router.post('/admin/notify-check-email', requireAdmin, async (req, res) => {
         title: '📧 Check your inbox!',
         body: "We've sent your Android testing invite link — check your email (and junk/spam) for it.",
       }).catch(() => {});
+    }
+
+    if (valid.length) {
+      await pool.query(
+        `UPDATE android_tester_signups SET reminded_at = NOW() WHERE user_id = ANY($1::int[])`,
+        [valid.map((v) => v.user_id)]
+      );
     }
 
     res.json({ success: true, notified: valid.length });

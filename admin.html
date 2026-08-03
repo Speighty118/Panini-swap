@@ -1072,19 +1072,38 @@ async function loadAndroidTesters() {
     const el = document.getElementById('androidTestersList');
     if (!items.length) { el.innerHTML = '<div class="empty">No volunteers yet.</div>'; document.getElementById('androidTestersNotifyBtn').disabled = true; return; }
 
-    el.innerHTML = `<div class="table-wrap"><table>
+    const pending = items.filter(t => !t.reminded_at);
+    const reminded = items.filter(t => t.reminded_at);
+
+    const pendingTable = pending.length ? `<div class="table-wrap"><table>
       <thead><tr>
         <th><input type="checkbox" id="androidTestersSelectAll" onchange="toggleAllAndroidTesters(this.checked)" /></th>
         <th>Name</th><th>Account email</th><th>Google/Play email</th><th>Signed up</th>
       </tr></thead>
-      <tbody>${items.map(t => `<tr>
+      <tbody>${pending.map(t => `<tr>
         <td><input type="checkbox" class="android-tester-checkbox" value="${t.user_id}" onchange="updateAndroidTesterNotifyBtn()" /></td>
         <td>${e(t.name)}</td>
         <td>${e(t.account_email)}</td>
         <td><strong>${e(t.google_email)}</strong></td>
         <td style="font-size:12px;color:#6B7280">${new Date(t.created_at).toLocaleString()}</td>
       </tr>`).join('')}
-      </tbody></table></div>`;
+      </tbody></table></div>` : '<div class="empty">Everyone has been reminded — nobody left to notify.</div>';
+
+    const remindedTable = reminded.length ? `<div class="table-wrap"><table>
+      <thead><tr><th>Name</th><th>Account email</th><th>Google/Play email</th><th>Reminded</th></tr></thead>
+      <tbody>${reminded.map(t => `<tr>
+        <td>${e(t.name)}</td>
+        <td>${e(t.account_email)}</td>
+        <td><strong>${e(t.google_email)}</strong></td>
+        <td style="font-size:12px;color:#6B7280">${new Date(t.reminded_at).toLocaleString()}</td>
+      </tr>`).join('')}
+      </tbody></table></div>` : '';
+
+    el.innerHTML =
+      `<div style="padding:14px 18px 0;font-size:12px;font-weight:600;color:#6B7280;text-transform:uppercase;letter-spacing:0.05em">Not yet reminded (${pending.length})</div>` +
+      pendingTable +
+      (reminded.length ? `<div style="padding:14px 18px 0;font-size:12px;font-weight:600;color:#6B7280;text-transform:uppercase;letter-spacing:0.05em">Already reminded (${reminded.length})</div>${remindedTable}` : '');
+
     updateAndroidTesterNotifyBtn();
   } catch(err) {
     document.getElementById('androidTestersList').innerHTML = `<div class="empty">Error: ${err.message}</div>`;
@@ -1115,6 +1134,7 @@ async function notifySelectedTesters() {
     });
     resultEl.textContent = `✓ Notified ${res.notified}`;
     setTimeout(() => { resultEl.textContent = ''; }, 4000);
+    loadAndroidTesters();
   } catch(e) { alert('Error: ' + e.message); }
 }
 
