@@ -15,6 +15,8 @@ const router = express.Router();
 const { Pool } = require('pg');
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const { requireAuth } = require('./middleware/auth');
+const { createNotification } = require('./notifications');
+const { sendPushNotification } = require('./push');
 
 const MAX_SIGNUPS = 20;
 
@@ -83,7 +85,7 @@ function requireAdmin(req, res, next) {
 router.get('/admin/list', requireAdmin, async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT ats.id, u.name, u.email AS account_email, ats.google_email, ats.created_at
+      `SELECT ats.id, ats.user_id, u.name, u.email AS account_email, ats.google_email, ats.created_at
        FROM android_tester_signups ats
        JOIN users u ON u.id = ats.user_id
        ORDER BY ats.created_at ASC`
@@ -91,6 +93,43 @@ router.get('/admin/list', requireAdmin, async (req, res) => {
     res.json(rows);
   } catch (err) {
     res.status(500).json({ error: 'Failed to load tester list' });
+  }
+});
+
+// POST /api/android-testers/admin/notify-check-email
+// Body: { userIds: [1, 2, 3] } — sends an in-app notification + push
+// to just the selected testers, reminding them to check their inbox
+// (and junk/spam folder) for the Play Console opt-in invite email.
+router.post('/admin/notify-check-email', requireAdmin, async (req, res) => {
+  try {
+    const userIds = Array.isArray(req.body.userIds) ? req.body.userIds.filter(Number.isInteger) : [];
+    if (!userIds.length) {
+      return res.status(400).json({ error: 'No testers selected' });
+    }
+
+    // Only notify users who are actually on the tester list, not arbitrary ids.
+    const { rows: valid } = await pool.query(
+      `SELECT user_id FROM android_tester_signups WHERE user_id = ANY($1::int[])`,
+      [userIds]
+    );
+
+    for (const { user_id } of valid) {
+      await createNotification(pool, {
+        userId: user_id,
+        type: 'android_tester_reminder',
+        title: '📧 Check your inbox!',
+        body: "We've sent your Android testing invite link — check your email (and your junk/spam folder!) for it.",
+      }).catch(() => {});
+      sendPushNotification(user_id, {
+        title: '📧 Check your inbox!',
+        body: "We've sent your Android testing invite link — check your email (and junk/spam) for it.",
+      }).catch(() => {});
+    }
+
+    res.json({ success: true, notified: valid.length });
+  } catch (err) {
+    console.error('Android tester notify error:', err.message);
+    res.status(500).json({ error: 'Failed to send reminders' });
   }
 });
 
