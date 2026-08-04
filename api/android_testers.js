@@ -155,21 +155,23 @@ router.get('/admin/list', requireAdmin, async (req, res) => {
 });
 
 // POST /api/android-testers/admin/notify-check-email
-// Body: { userIds: [1, 2, 3] } — sends an in-app notification + push
-// to just the selected testers, reminding them to check their inbox
+// Body: { ids: [1, 2, 3] } — android_tester_signups row ids. Sends an
+// in-app notification + push to the selected testers who have an
+// account (anonymous public-form signups are silently skipped, since
+// there's no account to notify), reminding them to check their inbox
 // (and junk/spam folder) for the Play Console opt-in invite email.
 router.post('/admin/notify-check-email', requireAdmin, async (req, res) => {
   try {
-    const userIds = Array.isArray(req.body.userIds) ? req.body.userIds.filter(Number.isInteger) : [];
-    if (!userIds.length) {
+    const ids = Array.isArray(req.body.ids) ? req.body.ids.filter(Number.isInteger) : [];
+    if (!ids.length) {
       return res.status(400).json({ error: 'No testers selected' });
     }
 
-    // Only notify users who are actually on the tester list AND haven't
-    // already been reminded, not arbitrary ids and not a double-send.
+    // Only notify rows that are actually on the tester list, have a
+    // linked account, and haven't already been reminded.
     const { rows: valid } = await pool.query(
-      `SELECT user_id FROM android_tester_signups WHERE user_id = ANY($1::int[]) AND reminded_at IS NULL`,
-      [userIds]
+      `SELECT id, user_id FROM android_tester_signups WHERE id = ANY($1::int[]) AND user_id IS NOT NULL AND reminded_at IS NULL`,
+      [ids]
     );
 
     for (const { user_id } of valid) {
@@ -187,8 +189,8 @@ router.post('/admin/notify-check-email', requireAdmin, async (req, res) => {
 
     if (valid.length) {
       await pool.query(
-        `UPDATE android_tester_signups SET reminded_at = NOW() WHERE user_id = ANY($1::int[])`,
-        [valid.map((v) => v.user_id)]
+        `UPDATE android_tester_signups SET reminded_at = NOW() WHERE id = ANY($1::int[])`,
+        [valid.map((v) => v.id)]
       );
     }
 
@@ -196,6 +198,30 @@ router.post('/admin/notify-check-email', requireAdmin, async (req, res) => {
   } catch (err) {
     console.error('Android tester notify error:', err.message);
     res.status(500).json({ error: 'Failed to send reminders' });
+  }
+});
+
+// POST /api/android-testers/admin/mark-reminded
+// Body: { ids: [1, 2, 3] } — android_tester_signups row ids. Moves
+// the selected testers into the "already reminded" section WITHOUT
+// sending any notification — for when the admin has already
+// contacted them some other way (e.g. emailed the invite link
+// directly), including anonymous public-form signups who have no
+// account to send an in-app notification to at all.
+router.post('/admin/mark-reminded', requireAdmin, async (req, res) => {
+  try {
+    const ids = Array.isArray(req.body.ids) ? req.body.ids.filter(Number.isInteger) : [];
+    if (!ids.length) {
+      return res.status(400).json({ error: 'No testers selected' });
+    }
+    const { rows } = await pool.query(
+      `UPDATE android_tester_signups SET reminded_at = NOW() WHERE id = ANY($1::int[]) AND reminded_at IS NULL RETURNING id`,
+      [ids]
+    );
+    res.json({ success: true, marked: rows.length });
+  } catch (err) {
+    console.error('Android tester mark-reminded error:', err.message);
+    res.status(500).json({ error: 'Failed to update testers' });
   }
 });
 

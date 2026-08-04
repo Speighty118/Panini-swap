@@ -520,8 +520,9 @@
         <button class="btn-small btn-primary" onclick="sendRecruitmentEmail()" id="androidTestersEmailBtn">📧 Email all users to recruit more</button>
         <span id="androidTestersEmailResult" style="font-size:13px;color:#1AAB8A"></span>
       </div>
-      <div style="padding:14px 18px;display:flex;align-items:center;gap:10px">
+      <div style="padding:14px 18px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
         <button class="btn-small" onclick="notifySelectedTesters()" id="androidTestersNotifyBtn" disabled>Remind selected to check their email</button>
+        <button class="btn-small btn-secondary" onclick="markSelectedReminded()" id="androidTestersMarkBtn" disabled>Mark selected as already contacted</button>
         <span id="androidTestersNotifyResult" style="font-size:13px;color:#1AAB8A"></span>
       </div>
       <div id="androidTestersList"></div>
@@ -1074,7 +1075,7 @@ async function loadAndroidTesters() {
     const items = await adminFetch('/android-testers/admin/list');
     document.getElementById('androidTestersCount').textContent = `${items.length} of 20 volunteered`;
     const el = document.getElementById('androidTestersList');
-    if (!items.length) { el.innerHTML = '<div class="empty">No volunteers yet.</div>'; document.getElementById('androidTestersNotifyBtn').disabled = true; return; }
+    if (!items.length) { el.innerHTML = '<div class="empty">No volunteers yet.</div>'; document.getElementById('androidTestersNotifyBtn').disabled = true; document.getElementById('androidTestersMarkBtn').disabled = true; return; }
 
     const pending = items.filter(t => !t.reminded_at);
     const reminded = items.filter(t => t.reminded_at);
@@ -1085,7 +1086,7 @@ async function loadAndroidTesters() {
         <th>Name</th><th>Account email</th><th>Google/Play email</th><th>Signed up</th>
       </tr></thead>
       <tbody>${pending.map(t => `<tr>
-        <td>${t.anonymous ? '' : `<input type="checkbox" class="android-tester-checkbox" value="${t.user_id}" onchange="updateAndroidTesterNotifyBtn()" />`}</td>
+        <td><input type="checkbox" class="android-tester-checkbox" value="${t.id}" data-anonymous="${t.anonymous}" onchange="updateAndroidTesterNotifyBtn()" /></td>
         <td>${e(t.name)}</td>
         <td>${t.anonymous ? '<span style="color:#9CA3AF;font-style:italic">No account (public form)</span>' : e(t.account_email)}</td>
         <td><strong>${e(t.google_email)}</strong></td>
@@ -1120,23 +1121,48 @@ function toggleAllAndroidTesters(checked) {
 }
 
 function updateAndroidTesterNotifyBtn() {
-  const selected = document.querySelectorAll('.android-tester-checkbox:checked').length;
-  const btn = document.getElementById('androidTestersNotifyBtn');
-  btn.disabled = selected === 0;
-  btn.textContent = selected ? `Remind ${selected} selected to check their email` : 'Remind selected to check their email';
+  const checked = Array.from(document.querySelectorAll('.android-tester-checkbox:checked'));
+  const selected = checked.length;
+  const notifiable = checked.filter(cb => cb.dataset.anonymous !== 'true').length;
+
+  const notifyBtn = document.getElementById('androidTestersNotifyBtn');
+  notifyBtn.disabled = notifiable === 0;
+  notifyBtn.textContent = notifiable ? `Remind ${notifiable} selected to check their email` : 'Remind selected to check their email';
+
+  const markBtn = document.getElementById('androidTestersMarkBtn');
+  markBtn.disabled = selected === 0;
+  markBtn.textContent = selected ? `Mark ${selected} selected as already contacted` : 'Mark selected as already contacted';
 }
 
 async function notifySelectedTesters() {
-  const userIds = Array.from(document.querySelectorAll('.android-tester-checkbox:checked')).map(cb => parseInt(cb.value, 10));
-  if (!userIds.length) return;
-  if (!confirm(`Send a "check your email" reminder notification to ${userIds.length} selected tester(s)?`)) return;
+  const ids = Array.from(document.querySelectorAll('.android-tester-checkbox:checked'))
+    .filter(cb => cb.dataset.anonymous !== 'true')
+    .map(cb => parseInt(cb.value, 10));
+  if (!ids.length) return;
+  if (!confirm(`Send a "check your email" reminder notification to ${ids.length} selected tester(s)?`)) return;
   const resultEl = document.getElementById('androidTestersNotifyResult');
   try {
     const res = await adminFetch('/android-testers/admin/notify-check-email', {
       method: 'POST',
-      body: JSON.stringify({ userIds }),
+      body: JSON.stringify({ ids }),
     });
     resultEl.textContent = `✓ Notified ${res.notified}`;
+    setTimeout(() => { resultEl.textContent = ''; }, 4000);
+    loadAndroidTesters();
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+async function markSelectedReminded() {
+  const ids = Array.from(document.querySelectorAll('.android-tester-checkbox:checked')).map(cb => parseInt(cb.value, 10));
+  if (!ids.length) return;
+  if (!confirm(`Mark ${ids.length} selected tester(s) as already contacted? No notification will be sent — use this if you've already emailed or messaged them the invite link yourself.`)) return;
+  const resultEl = document.getElementById('androidTestersNotifyResult');
+  try {
+    const res = await adminFetch('/android-testers/admin/mark-reminded', {
+      method: 'POST',
+      body: JSON.stringify({ ids }),
+    });
+    resultEl.textContent = `✓ Marked ${res.marked}`;
     setTimeout(() => { resultEl.textContent = ''; }, 4000);
     loadAndroidTesters();
   } catch(e) { alert('Error: ' + e.message); }
