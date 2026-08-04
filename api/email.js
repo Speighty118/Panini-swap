@@ -81,16 +81,16 @@ async function sendPasswordResetEmail(toEmail, name, resetUrl) {
   });
 }
 
-module.exports = { sendVerificationEmail, sendDisputeNotification, sendPasswordResetEmail, sendSwapProposedEmail, sendSwapAcceptedEmail, sendSwapPostedEmail, sendSwapReceivedEmail, sendSwapReminderEmail, sendFounderWelcomeEmail, sendAppLaunchEmail };
+module.exports = { sendVerificationEmail, sendDisputeNotification, sendPasswordResetEmail, sendSwapProposedEmail, sendSwapAcceptedEmail, sendSwapPostedEmail, sendSwapReceivedEmail, sendSwapReminderEmail, sendFounderWelcomeEmail, sendAppLaunchEmail, sendAndroidTesterRecruitmentEmail };
 
 const SITE_URL = process.env.FRONTEND_URL || 'https://www.gotonespare.com';
 
 function emailWrapper(content) {
   return `
     <div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto; background: #ffffff; border: 1px solid #e8e8e4; border-radius: 8px; overflow: hidden;">
-      <div style="background: #0B1120; padding: 20px 28px; display: flex; align-items: center; gap: 12px;">
+      <div style="background: #0B1120; padding: 16px 28px; display: flex; align-items: center; gap: 10px;">
+        <img src="${SITE_URL}/logo.png" width="32" height="32" alt="" style="display: block; border-radius: 8px;" />
         <span style="font-size: 18px; font-weight: 900; color: white; letter-spacing: -0.3px;">Got One Spare?</span>
-        <span style="font-size: 12px; color: rgba(255,255,255,0.4);">WC2026 Sticker Swaps</span>
       </div>
       <div style="padding: 28px;">
         ${content}
@@ -216,6 +216,29 @@ async function sendFounderWelcomeEmail(toEmail, name) {
       </div>
       <p style="color: #444; line-height: 1.6;">Core swapping, matching and messaging will always stay completely free for everyone — your support just helps keep it that way.</p>
       ${ctaButton('View your profile →', `${SITE_URL}`)}
+    `),
+  });
+}
+
+async function sendAndroidTesterRecruitmentEmail(toEmail, name, signupUrl) {
+  return resend.emails.send({
+    from: FROM_EMAIL,
+    to: toEmail,
+    subject: '📱 Help us launch the Android app — 10 seconds of your time',
+    html: emailWrapper(`
+      <h2 style="color: #0B1120; font-size: 20px; margin: 0 0 16px;">📱 We need your help testing Android!</h2>
+      <p style="color: #444; line-height: 1.6; margin: 0 0 12px;">Hi ${name},</p>
+      <p style="color: #444; line-height: 1.6; margin: 0 0 16px;">The Got One Spare Android app is almost ready — but Google requires a small group of volunteers to test it before it can go live for everyone.</p>
+      <div style="background: #ECFDF5; border: 1px solid #6EE7B7; border-radius: 4px; padding: 16px 18px; margin: 16px 0;">
+        <div style="font-size: 14px; font-weight: 700; color: #065F46; margin-bottom: 6px;">What's involved:</div>
+        <ul style="margin: 0; padding-left: 20px; color: #065F46; font-size: 13px; line-height: 1.8;">
+          <li>Takes 10 seconds to sign up</li>
+          <li>We'll email you an invite link once we've added you</li>
+          <li>You get early access to the app before anyone else</li>
+        </ul>
+      </div>
+      <p style="color: #444; line-height: 1.6;">If you're on Android and willing to help, tap below:</p>
+      ${ctaButton('Sign up to test the app →', signupUrl)}
     `),
   });
 }

@@ -516,6 +516,10 @@
       <p style="padding:10px 18px 0;font-size:13px;color:#6B7280;margin:0">
         People who volunteered to closed-test the Android app. Copy their Google email into Play Console's tester list, then send them the opt-in link — Google only counts testers once they actually click it.
       </p>
+      <div style="padding:14px 18px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;border-bottom:1px solid #F3F4F6">
+        <button class="btn-small btn-primary" onclick="sendRecruitmentEmail()" id="androidTestersEmailBtn">📧 Email all users to recruit more</button>
+        <span id="androidTestersEmailResult" style="font-size:13px;color:#1AAB8A"></span>
+      </div>
       <div style="padding:14px 18px;display:flex;align-items:center;gap:10px">
         <button class="btn-small" onclick="notifySelectedTesters()" id="androidTestersNotifyBtn" disabled>Remind selected to check their email</button>
         <span id="androidTestersNotifyResult" style="font-size:13px;color:#1AAB8A"></span>
@@ -1081,9 +1085,9 @@ async function loadAndroidTesters() {
         <th>Name</th><th>Account email</th><th>Google/Play email</th><th>Signed up</th>
       </tr></thead>
       <tbody>${pending.map(t => `<tr>
-        <td><input type="checkbox" class="android-tester-checkbox" value="${t.user_id}" onchange="updateAndroidTesterNotifyBtn()" /></td>
+        <td>${t.anonymous ? '' : `<input type="checkbox" class="android-tester-checkbox" value="${t.user_id}" onchange="updateAndroidTesterNotifyBtn()" />`}</td>
         <td>${e(t.name)}</td>
-        <td>${e(t.account_email)}</td>
+        <td>${t.anonymous ? '<span style="color:#9CA3AF;font-style:italic">No account (public form)</span>' : e(t.account_email)}</td>
         <td><strong>${e(t.google_email)}</strong></td>
         <td style="font-size:12px;color:#6B7280">${new Date(t.created_at).toLocaleString()}</td>
       </tr>`).join('')}
@@ -1093,7 +1097,7 @@ async function loadAndroidTesters() {
       <thead><tr><th>Name</th><th>Account email</th><th>Google/Play email</th><th>Reminded</th></tr></thead>
       <tbody>${reminded.map(t => `<tr>
         <td>${e(t.name)}</td>
-        <td>${e(t.account_email)}</td>
+        <td>${t.anonymous ? '<span style="color:#9CA3AF;font-style:italic">No account (public form)</span>' : e(t.account_email)}</td>
         <td><strong>${e(t.google_email)}</strong></td>
         <td style="font-size:12px;color:#6B7280">${new Date(t.reminded_at).toLocaleString()}</td>
       </tr>`).join('')}
@@ -1136,6 +1140,23 @@ async function notifySelectedTesters() {
     setTimeout(() => { resultEl.textContent = ''; }, 4000);
     loadAndroidTesters();
   } catch(e) { alert('Error: ' + e.message); }
+}
+
+async function sendRecruitmentEmail() {
+  if (!confirm('Email ALL active users asking them to volunteer as Android testers? This sends a real email via Resend to everyone.')) return;
+  const btn = document.getElementById('androidTestersEmailBtn');
+  const resultEl = document.getElementById('androidTestersEmailResult');
+  btn.disabled = true; btn.textContent = 'Sending...';
+  try {
+    const res = await adminFetch('/android-testers/admin/send-recruitment-email', { method: 'POST' });
+    resultEl.textContent = `✓ Sent to ${res.sent} of ${res.total} users`;
+    btn.textContent = '📧 Email all users to recruit more';
+    btn.disabled = false;
+  } catch(e) {
+    alert('Error: ' + e.message);
+    btn.textContent = '📧 Email all users to recruit more';
+    btn.disabled = false;
+  }
 }
 
 let signupChartInstance = null;
