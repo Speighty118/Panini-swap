@@ -1,12 +1,15 @@
 /**
  * Direct Messaging API
  *
- * GET  /api/messages                    — get all conversations for current user
- * POST /api/messages                    — start or continue a conversation
- * GET  /api/messages/:conversationId    — get messages in a conversation
- * POST /api/messages/:conversationId    — send a message in a conversation
- * POST /api/messages/:messageId/read    — mark conversation as read
- * POST /api/messages/:messageId/report  — report a message
+ * GET    /api/messages                    — get all conversations for current user
+ * POST   /api/messages                    — start or continue a conversation
+ * GET    /api/messages/blocked            — list users you've blocked
+ * POST   /api/messages/block/:userId      — block a user (stops them messaging you)
+ * DELETE /api/messages/block/:userId      — unblock a user
+ * GET    /api/messages/:conversationId    — get messages in a conversation
+ * POST   /api/messages/:conversationId    — send a message in a conversation
+ * POST   /api/messages/:messageId/read    — mark conversation as read
+ * POST   /api/messages/:messageId/report  — report a message
  */
 
 const express = require('express');
@@ -68,6 +71,68 @@ router.get('/', async (req, res) => {
 });
 
 // ----------------------------------------------------------------
+// GET /api/messages/blocked
+// List users the current user has blocked.
+// ----------------------------------------------------------------
+router.get('/blocked', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT u.id, u.name, ub.created_at AS blocked_at
+       FROM user_blocks ub
+       JOIN users u ON u.id = ub.blocked_id
+       WHERE ub.blocker_id = $1
+       ORDER BY ub.created_at DESC`,
+      [req.user.id]
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to load blocked users' });
+  }
+});
+
+// ----------------------------------------------------------------
+// POST /api/messages/block/:userId
+// Block a user — they can no longer message you, and you can no
+// longer send them messages either.
+// ----------------------------------------------------------------
+router.post('/block/:userId', async (req, res) => {
+  const blockedId = parseInt(req.params.userId, 10);
+  if (!blockedId || blockedId === req.user.id) {
+    return res.status(400).json({ error: 'Invalid user to block' });
+  }
+  try {
+    await pool.query(
+      `INSERT INTO user_blocks (blocker_id, blocked_id) VALUES ($1, $2)
+       ON CONFLICT (blocker_id, blocked_id) DO NOTHING`,
+      [req.user.id, blockedId]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to block user' });
+  }
+});
+
+// ----------------------------------------------------------------
+// DELETE /api/messages/block/:userId
+// Unblock a previously blocked user.
+// ----------------------------------------------------------------
+router.delete('/block/:userId', async (req, res) => {
+  const blockedId = parseInt(req.params.userId, 10);
+  try {
+    await pool.query(
+      `DELETE FROM user_blocks WHERE blocker_id = $1 AND blocked_id = $2`,
+      [req.user.id, blockedId]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to unblock user' });
+  }
+});
+
+// ----------------------------------------------------------------
 // POST /api/messages
 // Start a new conversation with a user, or return existing one.
 // Body: { recipientId, body }
@@ -80,6 +145,14 @@ router.post('/', async (req, res) => {
   }
   if (recipientId === senderId) {
     return res.status(400).json({ error: 'Cannot message yourself' });
+  }
+
+  const { rows: blockRows } = await pool.query(
+    `SELECT 1 FROM user_blocks WHERE (blocker_id = $1 AND blocked_id = $2) OR (blocker_id = $2 AND blocked_id = $1)`,
+    [senderId, recipientId]
+  );
+  if (blockRows.length) {
+    return res.status(403).json({ error: 'You cannot message this user' });
   }
 
   const client = await pool.connect();
@@ -178,7 +251,16 @@ router.get('/:conversationId', async (req, res) => {
       [conversationId, userId]
     );
 
-    res.json({ messages: rows, otherUser: otherRows[0] || null });
+    let isBlocked = false;
+    if (otherRows[0]) {
+      const { rows: blockCheck } = await pool.query(
+        `SELECT 1 FROM user_blocks WHERE blocker_id = $1 AND blocked_id = $2`,
+        [userId, otherRows[0].id]
+      );
+      isBlocked = blockCheck.length > 0;
+    }
+
+    res.json({ messages: rows, otherUser: otherRows[0] || null, isBlocked });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to fetch messages' });
@@ -202,6 +284,18 @@ router.post('/:conversationId/send', async (req, res) => {
       [conversationId, userId]
     );
     if (!partRows.length) return res.status(403).json({ error: 'Not your conversation' });
+
+    const { rows: otherParticipant } = await pool.query(
+      `SELECT user_id FROM conversation_participants WHERE conversation_id = $1 AND user_id != $2`,
+      [conversationId, userId]
+    );
+    if (otherParticipant[0]) {
+      const { rows: blockRows } = await pool.query(
+        `SELECT 1 FROM user_blocks WHERE (blocker_id = $1 AND blocked_id = $2) OR (blocker_id = $2 AND blocked_id = $1)`,
+        [userId, otherParticipant[0].user_id]
+      );
+      if (blockRows.length) return res.status(403).json({ error: 'You cannot message this user' });
+    }
 
     const { rows } = await pool.query(
       `INSERT INTO direct_messages (conversation_id, sender_id, body)
