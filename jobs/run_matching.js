@@ -8,10 +8,17 @@
  *   1. Calls find_matches(3, albumId) — the SQL function that finds user
  *      pairs where each side can give >= 3 stickers the other needs,
  *      scoped to that one album.
- *   2. Upserts results into the `matches` table.
+ *   2. Bulk-upserts results into the `matches` table in a single query
+ *      per album (via UNNEST), instead of one query per pair — this used
+ *      to loop with an individual awaited query per candidate pair,
+ *      which was fine at small scale but became thousands of sequential
+ *      round-trips as the user base grew, eventually taking minutes and
+ *      blowing past the cron trigger's 30s timeout (502/timeout
+ *      failures). Bulk upserting brings this back down to a handful of
+ *      queries total, regardless of how many pairs are found.
  *   3. Marks any previously-pending match that's no longer in the
  *      current result set as 'stale' (e.g. someone's inventory changed
- *      and they no longer qualify).
+ *      and they no longer qualify) — also a single bulk query per album.
  *
  * Run: node jobs/run_matching.js
  */
@@ -70,19 +77,18 @@ async function runMatchingJob() {
         console.log(`Album ${albumId}: skipping ${currentMatches.length - activeMatches.length} pair(s) involving paused user(s).`);
       }
 
-      const seenPairs = new Set();
+      if (activeMatches.length > 0) {
+        // Bulk upsert — one query for the whole album's pairs, via
+        // UNNEST'd arrays, instead of one query per pair.
+        const aArr = activeMatches.map(m => m.user_a);
+        const bArr = activeMatches.map(m => m.user_b);
+        const agbArr = activeMatches.map(m => m.a_gives_b_count);
+        const bgaArr = activeMatches.map(m => m.b_gives_a_count);
 
-      for (const m of activeMatches) {
-        const key = `${m.user_a}-${m.user_b}`;
-        seenPairs.add(key);
-
-        // RETURNING (xmax = 0) is the standard Postgres way to tell an
-        // upsert's INSERT branch apart from its UPDATE branch — lets us
-        // notify only on genuinely brand-new pairs, not every refresh of
-        // an existing match's counts (which happens on every run).
         const { rows: upserted } = await client.query(
           `INSERT INTO matches (user_a_id, user_b_id, album_id, a_gives_b_count, b_gives_a_count, status, computed_at)
-           VALUES ($1, $2, $3, $4, $5, 'pending', NOW())
+           SELECT u.a, u.b, $5::int, u.agb, u.bga, 'pending', NOW()
+           FROM UNNEST($1::int[], $2::int[], $3::int[], $4::int[]) AS u(a, b, agb, bga)
            ON CONFLICT (user_a_id, user_b_id, album_id)
            DO UPDATE SET
              a_gives_b_count = EXCLUDED.a_gives_b_count,
@@ -95,47 +101,45 @@ async function runMatchingJob() {
                -- (not still active).
                WHEN matches.status = 'proposed' AND NOT EXISTS (
                  SELECT 1 FROM swaps s
-                 WHERE ((s.user_a_id = $1 AND s.user_b_id = $2)
-                     OR (s.user_a_id = $2 AND s.user_b_id = $1))
-                 AND s.album_id = $3
+                 WHERE ((s.user_a_id = matches.user_a_id AND s.user_b_id = matches.user_b_id)
+                     OR (s.user_a_id = matches.user_b_id AND s.user_b_id = matches.user_a_id))
+                 AND s.album_id = matches.album_id
                  AND s.status IN ('proposed', 'accepted', 'posted')
                ) THEN 'pending'
                ELSE matches.status
              END
-           RETURNING (xmax = 0) AS is_new_pair`,
-          [m.user_a, m.user_b, albumId, m.a_gives_b_count, m.b_gives_a_count]
+           RETURNING user_a_id, user_b_id, a_gives_b_count, b_gives_a_count, (xmax = 0) AS is_new_pair`,
+          [aArr, bArr, agbArr, bgaArr, albumId]
         );
 
-        if (upserted[0]?.is_new_pair && Math.min(m.a_gives_b_count, m.b_gives_a_count) >= MIN_NOTIFY) {
-          newMatches.push(m);
+        for (const row of upserted) {
+          if (row.is_new_pair && Math.min(row.a_gives_b_count, row.b_gives_a_count) >= MIN_NOTIFY) {
+            newMatches.push({ user_a: row.user_a_id, user_b: row.user_b_id, a_gives_b_count: row.a_gives_b_count, b_gives_a_count: row.b_gives_a_count });
+          }
         }
       }
 
       // Mark stale: pending matches in this album not in this run's results
       // anymore (their inventories changed enough to drop below threshold).
       // We don't touch 'proposed' matches — those already became real swaps.
-      const { rows: existingPending } = await client.query(
-        `SELECT user_a_id, user_b_id FROM matches WHERE status = 'pending' AND album_id = $1`,
-        [albumId]
+      // Single bulk query using an anti-join against the active pairs,
+      // instead of a per-row SELECT+loop+per-row UPDATE.
+      const aArr = activeMatches.map(m => m.user_a);
+      const bArr = activeMatches.map(m => m.user_b);
+
+      const { rowCount: staleCount } = await client.query(
+        `UPDATE matches m
+         SET status = 'stale'
+         WHERE m.status = 'pending' AND m.album_id = $3
+           AND NOT EXISTS (
+             SELECT 1 FROM UNNEST($1::int[], $2::int[]) AS active(a, b)
+             WHERE active.a = m.user_a_id AND active.b = m.user_b_id
+           )`,
+        [aArr, bArr, albumId]
       );
 
-      const staleIds = [];
-      for (const row of existingPending) {
-        const key = `${row.user_a_id}-${row.user_b_id}`;
-        if (!seenPairs.has(key)) {
-          staleIds.push([row.user_a_id, row.user_b_id]);
-        }
-      }
-
-      for (const [a, b] of staleIds) {
-        await client.query(
-          `UPDATE matches SET status = 'stale' WHERE user_a_id = $1 AND user_b_id = $2 AND album_id = $3`,
-          [a, b, albumId]
-        );
-      }
-
       totalActive += currentMatches.length;
-      totalStale += staleIds.length;
+      totalStale += staleCount;
     }
 
     await client.query('COMMIT');
