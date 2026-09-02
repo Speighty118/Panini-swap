@@ -1,5 +1,5 @@
 -- ============================================
--- PANINI STICKER SWAP — DATABASE SCHEMA
+-- GOT ONE SPARE — DATABASE SCHEMA
 -- PostgreSQL
 -- ============================================
 

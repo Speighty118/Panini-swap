@@ -1,12 +1,14 @@
--- Seed data for 2026 FIFA World Cup album (980 stickers)
-INSERT INTO albums (id, name) VALUES (1, 'FIFA World Cup 2026') ON CONFLICT DO NOTHING;
+-- Seed data for 2026 World Cup album (980 stickers)
+-- Note: no third-party brand names (FIFA, Panini, etc.) in any album
+-- name or sticker content — see Apple App Store Guideline 5.2.1.
+INSERT INTO albums (id, name) VALUES (1, 'World Cup 2026') ON CONFLICT DO NOTHING;
 
 INSERT INTO stickers (album_id, sticker_number, team_name, description, is_shiny) VALUES
-(1, 'OP1', NULL, 'Panini Logo', TRUE),
-(1, 'OP2', NULL, 'Official Emblem', TRUE),
-(1, 'OP3', NULL, 'Official Mascot', TRUE),
+(1, 'OP1', NULL, 'Collector''s Badge', TRUE),
+(1, 'OP2', NULL, 'Tournament Emblem', TRUE),
+(1, 'OP3', NULL, 'Tournament Mascot', TRUE),
 (1, 'OP4', NULL, 'Tournament Slogan', TRUE),
-(1, 'OP5', NULL, 'Official Match Ball', TRUE),
+(1, 'OP5', NULL, 'Tournament Ball', TRUE),
 (1, 'OP6', NULL, 'Host City - USA', TRUE),
 (1, 'OP7', NULL, 'Host City - Mexico', TRUE),
 (1, 'OP8', NULL, 'Host City - Canada', TRUE),
