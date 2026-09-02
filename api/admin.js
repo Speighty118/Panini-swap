@@ -1596,4 +1596,108 @@ router.get('/pwa-stats', async (req, res) => {
   }
 });
 
+// ----------------------------------------------------------------
+// GET /api/admin/trading-cards-stats
+// Growth overview for the Premier League Trading Cards 2026/27
+// album - adoption is brand new (launched 2026-08-27) and has no
+// dedicated tracking anywhere else in the admin dashboard, unlike
+// the original sticker album which shows up throughout the main
+// analytics/overview panels. Looked up by name, not a hardcoded
+// album id, since album ids aren't stable across environments.
+// ----------------------------------------------------------------
+router.get('/trading-cards-stats', async (req, res) => {
+  try {
+    const { rows: [album] } = await pool.query(
+      `SELECT id, name FROM albums WHERE name = 'Premier League Trading Cards 2026/27'`
+    );
+    if (!album) return res.json({ exists: false });
+
+    const albumId = album.id;
+
+    const [totals, activity, dailyRes, topTeams, swapStatus] = await Promise.all([
+      pool.query(
+        `SELECT
+           (SELECT COUNT(*) FROM stickers WHERE album_id = $1) AS total_cards,
+           (SELECT COUNT(*) FROM matches WHERE album_id = $1) AS matches_total,
+           (SELECT COUNT(*) FROM matches WHERE album_id = $1 AND status = 'pending') AS matches_pending,
+           (SELECT COUNT(*) FROM swaps WHERE album_id = $1) AS swaps_total,
+           (SELECT COUNT(*) FROM swaps WHERE album_id = $1 AND status = 'completed') AS swaps_completed`,
+        [albumId]
+      ),
+      pool.query(
+        `SELECT
+           (SELECT COUNT(DISTINCT user_id) FROM user_duplicates ud JOIN stickers s ON s.id = ud.sticker_id WHERE s.album_id = $1) AS users_with_spares,
+           (SELECT COUNT(DISTINCT user_id) FROM user_needs un JOIN stickers s ON s.id = un.sticker_id WHERE s.album_id = $1) AS users_with_needs,
+           (SELECT COUNT(DISTINCT user_id) FROM (
+              SELECT ud.user_id FROM user_duplicates ud JOIN stickers s ON s.id = ud.sticker_id WHERE s.album_id = $1
+              UNION
+              SELECT un.user_id FROM user_needs un JOIN stickers s ON s.id = un.sticker_id WHERE s.album_id = $1
+            ) x) AS users_with_any_activity,
+           (SELECT COUNT(*) FROM user_duplicates ud JOIN stickers s ON s.id = ud.sticker_id WHERE s.album_id = $1) AS spare_listings,
+           (SELECT COALESCE(SUM(quantity), 0) FROM user_duplicates ud JOIN stickers s ON s.id = ud.sticker_id WHERE s.album_id = $1) AS spare_quantity,
+           (SELECT COUNT(*) FROM user_needs un JOIN stickers s ON s.id = un.sticker_id WHERE s.album_id = $1) AS need_listings`,
+        [albumId]
+      ),
+      // Daily new spare/need listings over the last 30 days - the
+      // actual "is it growing" signal, same shape as signups-chart.
+      pool.query(
+        `SELECT date, COALESCE(SUM(new_spares), 0) AS new_spares, COALESCE(SUM(new_needs), 0) AS new_needs
+         FROM (
+           SELECT DATE(ud.created_at) AS date, COUNT(*) AS new_spares, 0 AS new_needs
+           FROM user_duplicates ud JOIN stickers s ON s.id = ud.sticker_id
+           WHERE s.album_id = $1 AND ud.created_at > NOW() - INTERVAL '30 days'
+           GROUP BY DATE(ud.created_at)
+           UNION ALL
+           SELECT DATE(un.created_at) AS date, 0 AS new_spares, COUNT(*) AS new_needs
+           FROM user_needs un JOIN stickers s ON s.id = un.sticker_id
+           WHERE s.album_id = $1 AND un.created_at > NOW() - INTERVAL '30 days'
+           GROUP BY DATE(un.created_at)
+         ) combined
+         GROUP BY date ORDER BY date ASC`,
+        [albumId]
+      ),
+      // Top 8 teams by combined spare+need listings - shows which
+      // clubs collectors actually care about so far.
+      pool.query(
+        `SELECT team_name,
+                COUNT(*) FILTER (WHERE type = 'spare') AS spares,
+                COUNT(*) FILTER (WHERE type = 'need') AS needs
+         FROM (
+           SELECT s.team_name, 'spare' AS type FROM user_duplicates ud JOIN stickers s ON s.id = ud.sticker_id WHERE s.album_id = $1
+           UNION ALL
+           SELECT s.team_name, 'need' AS type FROM user_needs un JOIN stickers s ON s.id = un.sticker_id WHERE s.album_id = $1
+         ) t
+         GROUP BY team_name
+         ORDER BY (COUNT(*) FILTER (WHERE type = 'spare') + COUNT(*) FILTER (WHERE type = 'need')) DESC
+         LIMIT 8`,
+        [albumId]
+      ),
+      pool.query(`SELECT status, COUNT(*) AS count FROM swaps WHERE album_id = $1 GROUP BY status`, [albumId]),
+    ]);
+
+    res.json({
+      exists: true,
+      albumId,
+      albumName: album.name,
+      totalCards: parseInt(totals.rows[0].total_cards),
+      matchesTotal: parseInt(totals.rows[0].matches_total),
+      matchesPending: parseInt(totals.rows[0].matches_pending),
+      swapsTotal: parseInt(totals.rows[0].swaps_total),
+      swapsCompleted: parseInt(totals.rows[0].swaps_completed),
+      usersWithSpares: parseInt(activity.rows[0].users_with_spares),
+      usersWithNeeds: parseInt(activity.rows[0].users_with_needs),
+      usersWithAnyActivity: parseInt(activity.rows[0].users_with_any_activity),
+      spareListings: parseInt(activity.rows[0].spare_listings),
+      spareQuantity: parseInt(activity.rows[0].spare_quantity),
+      needListings: parseInt(activity.rows[0].need_listings),
+      dailyActivity: dailyRes.rows,
+      topTeams: topTeams.rows,
+      swapsByStatus: swapStatus.rows,
+    });
+  } catch (err) {
+    console.error('Trading cards stats error:', err);
+    res.status(500).json({ error: 'Failed to fetch trading cards stats', detail: err.message });
+  }
+});
+
 module.exports = router;

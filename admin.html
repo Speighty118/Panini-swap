@@ -529,6 +529,41 @@
     </div>
   </div>
 
+  <!-- TRADING CARDS -->
+  <div id="panel-trading-cards" class="panel">
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-header">
+        <h2>🃏 Premier League Trading Cards 2026/27</h2>
+        <button class="btn-small btn-secondary" onclick="loadTradingCardsStats()">Refresh</button>
+      </div>
+      <p style="padding:10px 18px 0;font-size:13px;color:#6B7280;margin:0">
+        Growth overview for the trading cards collection, launched 2026-08-27.
+      </p>
+    </div>
+
+    <div class="stats-grid" id="tradingCardsStats">
+      <div class="stat-card"><div class="stat-label">Collectors active</div><div class="stat-value" id="tc-stat-users">—</div></div>
+      <div class="stat-card"><div class="stat-label">Spare listings</div><div class="stat-value" id="tc-stat-spares">—</div></div>
+      <div class="stat-card"><div class="stat-label">Need listings</div><div class="stat-value" id="tc-stat-needs">—</div></div>
+      <div class="stat-card"><div class="stat-label">Matches found</div><div class="stat-value" id="tc-stat-matches">—</div></div>
+      <div class="stat-card"><div class="stat-label">Pending matches</div><div class="stat-value" id="tc-stat-pending">—</div></div>
+      <div class="stat-card"><div class="stat-label">Swaps started</div><div class="stat-value" id="tc-stat-swaps">—</div></div>
+      <div class="stat-card"><div class="stat-label">Swaps completed</div><div class="stat-value" id="tc-stat-completed">—</div></div>
+      <div class="stat-card"><div class="stat-label">Total cards in set</div><div class="stat-value" id="tc-stat-total">—</div></div>
+    </div>
+
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-header"><h2>📈 New listings, last 30 days</h2></div>
+      <div style="padding:16px"><canvas id="tradingCardsChart" height="160"></canvas></div>
+      <div id="tradingCardsChartEmpty" class="empty" style="display:none">No activity yet — nobody's added a spare or need for this collection in the last 30 days.</div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><h2>⭐ Most-listed clubs</h2></div>
+      <div id="tradingCardsTopTeams" style="padding:8px 18px 16px"></div>
+    </div>
+  </div>
+
   <!-- FEEDBACK -->
   <div id="panel-feedback" class="panel">
     <div class="card" style="margin-bottom:16px">
@@ -603,7 +638,8 @@
       <button onclick="showTab('feedback')" style="display:flex;align-items:center;gap:12px;width:100%;padding:14px;background:none;border:none;border-bottom:1px solid #f0f0f0;font-family:inherit;font-size:14px;font-weight:600;color:#0B1120;text-align:left;cursor:pointer">💬 Feedback</button>
       <button onclick="showTab('donations')" style="display:flex;align-items:center;gap:12px;width:100%;padding:14px;background:none;border:none;border-bottom:1px solid #f0f0f0;font-family:inherit;font-size:14px;font-weight:600;color:#0B1120;text-align:left;cursor:pointer">🏆 Founder clicks</button>
       <button onclick="showTab('app-launch')" style="display:flex;align-items:center;gap:12px;width:100%;padding:14px;background:none;border:none;border-bottom:1px solid #f0f0f0;font-family:inherit;font-size:14px;font-weight:600;color:#0B1120;text-align:left;cursor:pointer">📱 App launch interest</button>
-      <button onclick="showTab('android-testers')" style="display:flex;align-items:center;gap:12px;width:100%;padding:14px;background:none;border:none;font-family:inherit;font-size:14px;font-weight:600;color:#0B1120;text-align:left;cursor:pointer">🧪 Android testers</button>
+      <button onclick="showTab('android-testers')" style="display:flex;align-items:center;gap:12px;width:100%;padding:14px;background:none;border:none;border-bottom:1px solid #f0f0f0;font-family:inherit;font-size:14px;font-weight:600;color:#0B1120;text-align:left;cursor:pointer">🧪 Android testers</button>
+      <button onclick="showTab('trading-cards')" style="display:flex;align-items:center;gap:12px;width:100%;padding:14px;background:none;border:none;font-family:inherit;font-size:14px;font-weight:600;color:#0B1120;text-align:left;cursor:pointer">🃏 Trading cards</button>
     </div>
   </div>
 </div>
@@ -623,13 +659,13 @@ let allUsers = [];
 let modCases = [];
 
 function showTab(name) {
-  const allPanels = ['overview','analytics','users','swaps','messages','moderation','invites','feedback','donations','app-launch','android-testers','more'];
+  const allPanels = ['overview','analytics','users','swaps','messages','moderation','invites','feedback','donations','app-launch','android-testers','trading-cards','more'];
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   const panel = document.getElementById('panel-' + name);
   if (panel) panel.classList.add('active');
 
   // Update bottom nav active state
-  const navMap = { overview: 0, users: 1, swaps: 2, messages: 3, more: 4, analytics: 4, moderation: 4, invites: 4, feedback: 4, donations: 4, 'app-launch': 4, 'android-testers': 4 };
+  const navMap = { overview: 0, users: 1, swaps: 2, messages: 3, more: 4, analytics: 4, moderation: 4, invites: 4, feedback: 4, donations: 4, 'app-launch': 4, 'android-testers': 4, 'trading-cards': 4 };
   document.querySelectorAll('.nav-item').forEach((item, i) => {
     item.classList.toggle('active', i === navMap[name]);
   });
@@ -638,6 +674,7 @@ function showTab(name) {
   if (name === 'donations') loadDonations();
   if (name === 'app-launch') loadAppLaunch();
   if (name === 'android-testers') loadAndroidTesters();
+  if (name === 'trading-cards') loadTradingCardsStats();
   if (name === 'moderation') { loadModerationCases(); loadActionLog(); }
   if (name === 'messages') loadAdminMessages();
   if (name === 'ambassador') loadAmbassador();
@@ -1187,6 +1224,7 @@ async function sendRecruitmentEmail() {
 
 let signupChartInstance = null;
 let dauChartInstance = null;
+let tradingCardsChartInstance = null;
 
 function drawBarChart(canvasId, labels, data, label, colour, instanceRef) {
   const ctx = document.getElementById(canvasId)?.getContext('2d');
@@ -1246,6 +1284,78 @@ async function loadDauChart() {
     );
     dauChartInstance = ref.current;
   } catch(e) { console.error('dau chart', e); }
+}
+
+async function loadTradingCardsStats() {
+  try {
+    const data = await adminFetch('/admin/trading-cards-stats');
+    if (!data.exists) {
+      document.getElementById('tradingCardsStats').innerHTML = '<div class="empty">Album not found — has it been renamed or removed?</div>';
+      return;
+    }
+
+    document.getElementById('tc-stat-users').textContent = data.usersWithAnyActivity;
+    document.getElementById('tc-stat-spares').textContent = data.spareListings;
+    document.getElementById('tc-stat-needs').textContent = data.needListings;
+    document.getElementById('tc-stat-matches').textContent = data.matchesTotal;
+    document.getElementById('tc-stat-pending').textContent = data.matchesPending;
+    document.getElementById('tc-stat-swaps').textContent = data.swapsTotal;
+    document.getElementById('tc-stat-completed').textContent = data.swapsCompleted;
+    document.getElementById('tc-stat-total').textContent = data.totalCards;
+
+    const chartEmpty = document.getElementById('tradingCardsChartEmpty');
+    const hasActivity = data.dailyActivity.some(d => parseInt(d.new_spares) > 0 || parseInt(d.new_needs) > 0);
+    chartEmpty.style.display = hasActivity ? 'none' : 'block';
+    document.getElementById('tradingCardsChart').style.display = hasActivity ? 'block' : 'none';
+
+    if (hasActivity) {
+      const ctx = document.getElementById('tradingCardsChart')?.getContext('2d');
+      if (ctx) {
+        if (tradingCardsChartInstance) tradingCardsChartInstance.destroy();
+        tradingCardsChartInstance = new Chart(ctx, {
+          type: 'bar',
+          data: {
+            labels: data.dailyActivity.map(d => new Date(d.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })),
+            datasets: [
+              { label: 'New spares', data: data.dailyActivity.map(d => parseInt(d.new_spares)), backgroundColor: '#1AAB8A', borderRadius: 4 },
+              { label: 'New needs', data: data.dailyActivity.map(d => parseInt(d.new_needs)), backgroundColor: '#6366F1', borderRadius: 4 },
+            ],
+          },
+          options: {
+            responsive: true,
+            plugins: { legend: { display: true, position: 'top', labels: { boxWidth: 12, font: { size: 11 } } } },
+            scales: {
+              y: { beginAtZero: true, ticks: { precision: 0 } },
+              x: { ticks: { maxTicksLimit: 10, font: { size: 10 } } },
+            },
+          },
+        });
+      }
+    }
+
+    const teamsEl = document.getElementById('tradingCardsTopTeams');
+    if (!data.topTeams.length) {
+      teamsEl.innerHTML = '<div class="empty">No listings yet.</div>';
+    } else {
+      const maxCount = Math.max(...data.topTeams.map(t => parseInt(t.spares) + parseInt(t.needs)));
+      teamsEl.innerHTML = data.topTeams.map(t => {
+        const total = parseInt(t.spares) + parseInt(t.needs);
+        const pct = maxCount ? Math.round((total / maxCount) * 100) : 0;
+        return `<div style="margin-bottom:10px">
+          <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:3px">
+            <span style="font-weight:600">${t.team_name}</span>
+            <span style="color:#6B7280">${t.spares} spare${t.spares == 1 ? '' : 's'} · ${t.needs} need${t.needs == 1 ? '' : 's'}</span>
+          </div>
+          <div style="background:#F3F4F6;border-radius:4px;height:6px;overflow:hidden">
+            <div style="background:#1AAB8A;height:100%;width:${pct}%"></div>
+          </div>
+        </div>`;
+      }).join('');
+    }
+  } catch (e) {
+    console.error('trading cards stats', e);
+    document.getElementById('tradingCardsStats').innerHTML = '<div class="empty">Failed to load stats.</div>';
+  }
 }
 
 async function loadSwapFunnelChart() {
