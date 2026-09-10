@@ -246,3 +246,15 @@ $$ LANGUAGE plpgsql;
 -- SELECT * FROM get_swap_proposal(12, 47, 5, 1);
 -- (Then in app code, pick min_match items from each direction —
 --  or all of them — to insert into swap_items when the swap is created)
+
+-- ----------------------------------------------------------------
+-- App Store link click tracking (added post-iOS-launch).
+-- Fire-and-forget beacon from the website when someone taps a
+-- "Download on the App Store" link. Surfaced on the admin overview.
+-- ----------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS appstore_clicks (
+    id          SERIAL PRIMARY KEY,
+    source      VARCHAR(20) NOT NULL,   -- 'widget' | 'banner'
+    user_id     INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    created_at  TIMESTAMP DEFAULT NOW()
+);

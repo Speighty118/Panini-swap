@@ -50,6 +50,27 @@ router.post('/notify', requireAuth, async (req, res) => {
 });
 
 // ----------------------------------------------------------------
+// POST /api/app-launch/track-click
+// Fire-and-forget from the website when someone taps a "Download on
+// the App Store" link — the floating iOS widget or the dashboard
+// banner. Best-effort: a tracking beacon must never block or fail
+// the actual link, so this always returns 200.
+// Body: { source } — 'widget' | 'banner'
+// ----------------------------------------------------------------
+router.post('/track-click', requireAuth, async (req, res) => {
+  const source = ['widget', 'banner'].includes(req.body?.source) ? req.body.source : 'unknown';
+  try {
+    await pool.query(
+      `INSERT INTO appstore_clicks (source, user_id) VALUES ($1, $2)`,
+      [source, req.user.id]
+    );
+  } catch (err) {
+    console.error('App Store click track error:', err.message);
+  }
+  res.json({ ok: true });
+});
+
+// ----------------------------------------------------------------
 // Admin endpoints — self-contained here (same pattern as pl2026.js)
 // so this doesn't need to touch admin.js at all.
 // ----------------------------------------------------------------
@@ -81,6 +102,41 @@ router.get('/admin/list', requireAdmin, async (req, res) => {
     res.json(rows);
   } catch (err) {
     res.status(500).json({ error: 'Failed to load waiting list' });
+  }
+});
+
+// GET /api/app-launch/admin/click-stats — App Store link click totals
+router.get('/admin/click-stats', requireAdmin, async (req, res) => {
+  try {
+    const [totals, daily] = await Promise.all([
+      pool.query(`
+        SELECT
+          COUNT(*) AS total,
+          COUNT(*) FILTER (WHERE source = 'widget') AS widget,
+          COUNT(*) FILTER (WHERE source = 'banner') AS banner,
+          COUNT(*) FILTER (WHERE created_at >= CURRENT_DATE) AS today,
+          COUNT(DISTINCT user_id) AS unique_users
+        FROM appstore_clicks
+      `),
+      pool.query(`
+        SELECT DATE(created_at) AS date, COUNT(*) AS count
+        FROM appstore_clicks
+        WHERE created_at > NOW() - INTERVAL '30 days'
+        GROUP BY DATE(created_at) ORDER BY date ASC
+      `),
+    ]);
+    const t = totals.rows[0];
+    res.json({
+      total: parseInt(t.total, 10),
+      widget: parseInt(t.widget, 10),
+      banner: parseInt(t.banner, 10),
+      today: parseInt(t.today, 10),
+      uniqueUsers: parseInt(t.unique_users, 10),
+      daily: daily.rows,
+    });
+  } catch (err) {
+    console.error('App Store click stats error:', err.message);
+    res.status(500).json({ error: 'Failed to load click stats' });
   }
 });
 
