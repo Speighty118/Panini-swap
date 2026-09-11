@@ -258,3 +258,10 @@ CREATE TABLE IF NOT EXISTS appstore_clicks (
     user_id     INTEGER REFERENCES users(id) ON DELETE SET NULL,
     created_at  TIMESTAMP DEFAULT NOW()
 );
+
+-- ----------------------------------------------------------------
+-- Native push notification support (added when native APNs push
+-- was built, alongside the existing web-push VAPID columns above).
+-- ----------------------------------------------------------------
+ALTER TABLE users ADD COLUMN IF NOT EXISTS apns_device_token VARCHAR(200);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS ios_launch_email_sent_at TIMESTAMP;
