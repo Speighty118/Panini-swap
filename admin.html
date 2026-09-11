@@ -239,14 +239,14 @@
         <button class="btn-small btn-secondary" onclick="loadLaunchEmailProgress()">Refresh</button>
       </div>
       <p style="padding:10px 18px 0;font-size:13px;color:#6B7280;margin:0">
-        Sends the branded "the app is here" email to verified users who haven't had it yet — waiting-list sign-ups and most-recently-active first. Each batch defaults to 80 (keeping ~20/day headroom under Resend's 100/day free limit for password resets, verification, and swap emails). Safe to run once a day until "remaining" hits 0.
+        Sends the branded "the app is here" email to verified users who haven't had it yet — waiting-list sign-ups and most-recently-active first. Each batch defaults to 50 (keeping plenty of headroom under Resend's 100/day free limit for password resets, verification, and swap emails). Safe to run once a day until "remaining" hits 0.
       </p>
       <div class="stats-grid" style="padding:12px 18px 4px">
         <div class="stat-card"><div class="stat-label">Sent so far</div><div class="stat-value" id="ile-sent">—</div></div>
         <div class="stat-card"><div class="stat-label">Remaining</div><div class="stat-value" id="ile-remaining">—</div></div>
       </div>
       <div style="padding:8px 18px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-        <button class="btn-small btn-primary" onclick="sendLaunchEmailBatch()" id="ile-sendBtn">Send next batch (up to 80)</button>
+        <button class="btn-small btn-primary" onclick="sendLaunchEmailBatch()" id="ile-sendBtn">Send next batch (up to 50)</button>
         <span id="ile-result" style="font-size:13px;color:#6B7280"></span>
       </div>
     </div>
@@ -2066,7 +2066,7 @@ async function sendLaunchEmailBatch() {
   btn.disabled = true;
   resultEl.textContent = 'Sending…';
   try {
-    const d = await adminFetch('/app-launch/admin/send-launch-batch', { method: 'POST', body: JSON.stringify({ limit: 80 }) });
+    const d = await adminFetch('/app-launch/admin/send-launch-batch', { method: 'POST', body: JSON.stringify({ limit: 50 }) });
     resultEl.textContent = `Sent ${d.sent} of ${d.batchSize}${d.failed ? ` (${d.failed} failed)` : ''} — ${d.remaining} left.`;
     document.getElementById('ile-sent').textContent = parseInt(document.getElementById('ile-sent').textContent || '0', 10) + d.sent;
     document.getElementById('ile-remaining').textContent = d.remaining;

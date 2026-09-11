@@ -168,12 +168,12 @@ router.get('/admin/launch-email-progress', requireAdmin, async (req, res) => {
 // Sends the iOS-launch email to the next batch of verified users who
 // haven't had it yet, most-likely-to-act-on-it first: people who
 // explicitly asked to be notified, then most-recently-active. Body:
-// { limit } — defaults to 80, deliberately under Resend's 100/day
+// { limit } — defaults to 50, deliberately under Resend's 100/day
 // free-tier cap so there's daily headroom left for transactional
 // email (password resets, verification, swap notifications).
 // Safe to call once a day until "remaining" hits 0.
 // ----------------------------------------------------------------
-async function sendNextLaunchBatch(limit = 80) {
+async function sendNextLaunchBatch(limit = 50) {
   const safeLimit = Math.min(limit, 200);
   const { rows: batch } = await pool.query(
     `SELECT id, name, email FROM users
@@ -207,7 +207,7 @@ async function sendNextLaunchBatch(limit = 80) {
 }
 
 router.post('/admin/send-launch-batch', requireAdmin, async (req, res) => {
-  const limit = parseInt(req.body?.limit, 10) || 80;
+  const limit = parseInt(req.body?.limit, 10) || 50;
   try {
     res.json(await sendNextLaunchBatch(limit));
   } catch (err) {
