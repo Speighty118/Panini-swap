@@ -245,22 +245,58 @@ async function sendAndroidTesterRecruitmentEmail(toEmail, name, signupUrl) {
 
 const IOS_APP_STORE_URL = 'https://apps.apple.com/app/got-one-spare/id6794436890';
 
+// Bespoke, higher-impact layout for this one-off launch announcement
+// — deliberately not the plain shared emailWrapper() used for
+// transactional emails (receipts, resets, swap notifications), since
+// this is a rare "big news" moment that should look like one. Kept
+// to a single stacked column throughout (no flex/grid/tables) so it
+// renders consistently across Gmail, Apple Mail, and Outlook.
 async function sendAppLaunchEmail(toEmail, name) {
+  const html = `
+    <div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; max-width: 560px; margin: 0 auto; background: #ffffff; border-radius: 14px; overflow: hidden; box-shadow: 0 1px 3px rgba(11,17,32,0.08);">
+
+      <div style="background: linear-gradient(135deg, #0B1120 0%, #0E2A22 100%); padding: 44px 32px 40px; text-align: center;">
+        <img src="${SITE_URL}/logo.png" width="56" height="56" alt="" style="display: block; margin: 0 auto 18px; border-radius: 14px;" />
+        <div style="font-size: 12px; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase; color: #5DCAA5; margin-bottom: 12px;">Launch day</div>
+        <h1 style="font-size: 30px; font-weight: 900; color: #ffffff; margin: 0 0 10px; line-height: 1.15;">It's here. 🎉</h1>
+        <p style="font-size: 15px; color: #B9C9C3; margin: 0;">Got One Spare? is now on the App Store</p>
+      </div>
+
+      <div style="padding: 36px 32px 8px;">
+        <p style="color: #444; line-height: 1.6; margin: 0 0 14px; font-size: 15px;">Hi ${name},</p>
+        <p style="color: #444; line-height: 1.6; margin: 0 0 24px; font-size: 15px;">The wait's over — the Got One Spare? iOS app is officially live. Swap stickers straight from your phone, with instant notifications the moment someone matches with you or accepts a swap.</p>
+
+        <div style="text-align: center; margin: 0 0 28px;">
+          <a href="${IOS_APP_STORE_URL}" style="display: inline-block; background: #0B1120; color: #ffffff; padding: 16px 34px; text-decoration: none; border-radius: 12px; font-weight: 800; font-size: 16px; letter-spacing: -0.01em;">
+            📲 Download on the App Store
+          </a>
+        </div>
+
+        <div style="background: #E1F5EE; border-radius: 10px; padding: 18px 20px; margin: 0 0 16px;">
+          <div style="font-size: 14px; font-weight: 800; color: #085041; margin-bottom: 4px;">✓ Your account carries straight over</div>
+          <div style="font-size: 13px; color: #0F6E56; line-height: 1.5;">Log in with the same email and password — your spares, needs, matches, and swap history are all already there waiting for you.</div>
+        </div>
+
+        <div style="background: #FFF8E1; border: 1px solid #FDE68A; border-radius: 10px; padding: 18px 20px; margin: 0 0 8px;">
+          <div style="font-size: 14px; font-weight: 800; color: #92400E; margin-bottom: 4px;">🃏 New: Premier League Trading Cards 2026/27</div>
+          <div style="font-size: 13px; color: #92400E; line-height: 1.5;">A brand new collection just launched — swap this season's cards alongside your stickers, same automatic matching.</div>
+        </div>
+      </div>
+
+      <div style="padding: 20px 32px 32px;">
+        <p style="color: #999; font-size: 12px; margin: 0 0 20px;">Android version is coming soon — we'll email you the moment it's ready.</p>
+        <div style="padding-top: 18px; border-top: 1px solid #f0f0f0; font-size: 11px; color: #bbb; line-height: 1.6;">
+          You're receiving this because you have an account on <a href="${SITE_URL}" style="color: #1AAB8A;">gotonespare.com</a>.<br>
+          You can update your email preferences in your <a href="${SITE_URL}" style="color: #1AAB8A;">profile settings</a>.
+        </div>
+      </div>
+    </div>
+  `;
+
   return resend.emails.send({
     from: FROM_EMAIL,
     to: toEmail,
-    subject: '📱 The Got One Spare? app is here!',
-    html: emailWrapper(`
-      <h2 style="color: #0B1120; font-size: 20px; margin: 0 0 16px;">📱 It's here — download now</h2>
-      <p style="color: #444; line-height: 1.6; margin: 0 0 12px;">Hi ${name},</p>
-      <p style="color: #444; line-height: 1.6; margin: 0 0 16px;">The Got One Spare? iOS app is officially live on the App Store — swap stickers straight from your phone, with instant notifications the moment someone matches with you or accepts a swap.</p>
-      <div style="background: #ECFDF5; border: 1px solid #6EE7B7; border-radius: 4px; padding: 14px 16px; margin: 16px 0;">
-        <div style="font-size: 13px; font-weight: 700; color: #065F46;">Your account carries straight over</div>
-        <div style="font-size: 12px; color: #065F46; margin-top: 4px;">Log in with the same email and password — your spares, needs, matches, and swap history are all already there.</div>
-      </div>
-      <p style="color: #444; line-height: 1.6; margin: 0 0 16px;">While you're at it — we've also just launched <strong>Premier League Trading Cards 2026/27</strong>, a brand new collection you can swap alongside your stickers.</p>
-      ${ctaButton('Download on the App Store →', IOS_APP_STORE_URL)}
-      <p style="color: #999; font-size: 12px; margin-top: 16px;">Android version is coming soon — we'll email you the moment it's ready.</p>
-    `),
+    subject: "🎉 It's here — Got One Spare? is now on the App Store!",
+    html,
   });
 }

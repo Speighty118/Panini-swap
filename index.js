@@ -266,6 +266,25 @@ app.get('/api/activity', async (req, res) => {
 // Called by Railway's HTTP cron on a schedule. Protected by a shared
 // secret passed as a query param, since Railway's simple HTTP cron
 // tool only supports a plain URL (no custom headers).
+// ---- Internal: send the next batch of the iOS launch emails ----
+// Set up a cron job hitting this URL once a day. Defaults to 80/run
+// (see app_launch.js), leaving headroom under Resend's 100/day free
+// limit for transactional email. Stops sending on its own once
+// everyone verified has had it - safe to leave running indefinitely.
+app.all('/api/internal/run-launch-email-batch', async (req, res) => {
+  const providedSecret = req.query.secret;
+  if (!process.env.CRON_SECRET || providedSecret !== process.env.CRON_SECRET) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  try {
+    const result = await appLaunchRoutes.sendNextLaunchBatch(80);
+    res.json({ success: true, ranAt: new Date().toISOString(), ...result });
+  } catch (err) {
+    console.error('Launch email batch job failed:', err.message);
+    res.status(500).json({ error: 'Launch email batch job failed' });
+  }
+});
+
 app.all('/api/internal/run-matching', async (req, res) => {
   const providedSecret = req.query.secret;
   if (!process.env.CRON_SECRET || providedSecret !== process.env.CRON_SECRET) {

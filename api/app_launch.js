@@ -173,38 +173,43 @@ router.get('/admin/launch-email-progress', requireAdmin, async (req, res) => {
 // email (password resets, verification, swap notifications).
 // Safe to call once a day until "remaining" hits 0.
 // ----------------------------------------------------------------
-router.post('/admin/send-launch-batch', requireAdmin, async (req, res) => {
-  const limit = Math.min(parseInt(req.body?.limit, 10) || 80, 200);
-  try {
-    const { rows: batch } = await pool.query(
-      `SELECT id, name, email FROM users
-       WHERE is_suspended = FALSE AND email_verified = TRUE AND ios_launch_email_sent_at IS NULL
-       ORDER BY notify_app_launch DESC, last_login_at DESC NULLS LAST
-       LIMIT $1`,
-      [limit]
-    );
+async function sendNextLaunchBatch(limit = 80) {
+  const safeLimit = Math.min(limit, 200);
+  const { rows: batch } = await pool.query(
+    `SELECT id, name, email FROM users
+     WHERE is_suspended = FALSE AND email_verified = TRUE AND ios_launch_email_sent_at IS NULL
+     ORDER BY notify_app_launch DESC, last_login_at DESC NULLS LAST
+     LIMIT $1`,
+    [safeLimit]
+  );
 
-    let sent = 0;
-    const failed = [];
-    for (const user of batch) {
-      try {
-        await sendAppLaunchEmail(user.email, user.name);
-        await pool.query(
-          `UPDATE users SET ios_launch_email_sent_at = NOW(), notify_app_launch = FALSE WHERE id = $1`,
-          [user.id]
-        );
-        sent++;
-      } catch (err) {
-        console.error(`iOS launch email failed for user ${user.id}:`, err.message);
-        failed.push(user.id);
-      }
+  let sent = 0;
+  const failed = [];
+  for (const user of batch) {
+    try {
+      await sendAppLaunchEmail(user.email, user.name);
+      await pool.query(
+        `UPDATE users SET ios_launch_email_sent_at = NOW(), notify_app_launch = FALSE WHERE id = $1`,
+        [user.id]
+      );
+      sent++;
+    } catch (err) {
+      console.error(`iOS launch email failed for user ${user.id}:`, err.message);
+      failed.push(user.id);
     }
+  }
 
-    const { rows: remainingRows } = await pool.query(
-      `SELECT COUNT(*) FROM users WHERE is_suspended = FALSE AND email_verified = TRUE AND ios_launch_email_sent_at IS NULL`
-    );
+  const { rows: remainingRows } = await pool.query(
+    `SELECT COUNT(*) FROM users WHERE is_suspended = FALSE AND email_verified = TRUE AND ios_launch_email_sent_at IS NULL`
+  );
 
-    res.json({ sent, failed: failed.length, batchSize: batch.length, remaining: parseInt(remainingRows[0].count, 10) });
+  return { sent, failed: failed.length, batchSize: batch.length, remaining: parseInt(remainingRows[0].count, 10) };
+}
+
+router.post('/admin/send-launch-batch', requireAdmin, async (req, res) => {
+  const limit = parseInt(req.body?.limit, 10) || 80;
+  try {
+    res.json(await sendNextLaunchBatch(limit));
   } catch (err) {
     console.error('iOS launch batch send error:', err.message);
     res.status(500).json({ error: 'Failed to send batch' });
@@ -242,3 +247,4 @@ router.post('/admin/announce-launch', requireAdmin, async (req, res) => {
 });
 
 module.exports = router;
+module.exports.sendNextLaunchBatch = sendNextLaunchBatch;
