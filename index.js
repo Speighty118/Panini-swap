@@ -271,6 +271,39 @@ app.get('/api/activity', async (req, res) => {
 // (see app_launch.js), leaving headroom under Resend's 100/day free
 // limit for transactional email. Stops sending on its own once
 // everyone verified has had it - safe to leave running indefinitely.
+// ---- Internal: diagnose whether the APNs env vars are set up
+// correctly, without sending an actual push to any device. Checks
+// that all three vars are present and that the private key actually
+// parses and signs a JWT - the most common failure mode is a
+// malformed paste of the .p8 contents (missing a newline, stray
+// whitespace). Safe to leave in place; reveals no secret values.
+app.all('/api/internal/apns-check', async (req, res) => {
+  const providedSecret = req.query.secret;
+  if (!process.env.CRON_SECRET || providedSecret !== process.env.CRON_SECRET) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  const present = {
+    APNS_KEY_ID: Boolean(process.env.APNS_KEY_ID),
+    APNS_TEAM_ID: Boolean(process.env.APNS_TEAM_ID),
+    APNS_AUTH_KEY: Boolean(process.env.APNS_AUTH_KEY),
+  };
+  if (!present.APNS_KEY_ID || !present.APNS_TEAM_ID || !present.APNS_AUTH_KEY) {
+    return res.json({ configured: false, present });
+  }
+  try {
+    const jwt = require('jsonwebtoken');
+    const privateKey = process.env.APNS_AUTH_KEY.replace(/\\n/g, '\n');
+    const token = jwt.sign(
+      { iss: process.env.APNS_TEAM_ID, iat: Math.floor(Date.now() / 1000) },
+      privateKey,
+      { algorithm: 'ES256', header: { alg: 'ES256', kid: process.env.APNS_KEY_ID } }
+    );
+    res.json({ configured: true, present, jwtSigned: Boolean(token), keyIdUsed: process.env.APNS_KEY_ID });
+  } catch (err) {
+    res.json({ configured: false, present, error: err.message });
+  }
+});
+
 app.all('/api/internal/run-launch-email-batch', async (req, res) => {
   const providedSecret = req.query.secret;
   if (!process.env.CRON_SECRET || providedSecret !== process.env.CRON_SECRET) {
