@@ -265,3 +265,9 @@ CREATE TABLE IF NOT EXISTS appstore_clicks (
 -- ----------------------------------------------------------------
 ALTER TABLE users ADD COLUMN IF NOT EXISTS apns_device_token VARCHAR(200);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS ios_launch_email_sent_at TIMESTAMP;
+
+-- Tracks the first time a user opens the native iOS/Android app,
+-- independent of whether they grant notification permission - a
+-- true "installed and opened the app" signal (apns_device_token
+-- alone only covers those who also said yes to notifications).
+ALTER TABLE users ADD COLUMN IF NOT EXISTS native_app_opened_at TIMESTAMP;

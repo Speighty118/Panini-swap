@@ -1577,18 +1577,22 @@ router.post('/test-push', async (req, res) => {
 // ----------------------------------------------------------------
 router.get('/pwa-stats', async (req, res) => {
   try {
-    const [installs, pushSubs, installUsers, pushUsers] = await Promise.all([
+    const [installs, pushSubs, nativeOpens, installUsers, pushUsers, nativeUsers] = await Promise.all([
       pool.query(`SELECT COUNT(*) FROM users WHERE pwa_installed_at IS NOT NULL`),
       pool.query(`SELECT COUNT(*) FROM users WHERE push_subscription IS NOT NULL`),
+      pool.query(`SELECT COUNT(*) FROM users WHERE native_app_opened_at IS NOT NULL`),
       pool.query(`SELECT name, email, pwa_installed_at FROM users WHERE pwa_installed_at IS NOT NULL ORDER BY pwa_installed_at DESC`),
       pool.query(`SELECT name, email FROM users WHERE push_subscription IS NOT NULL ORDER BY name ASC`),
+      pool.query(`SELECT name, email, native_app_opened_at FROM users WHERE native_app_opened_at IS NOT NULL ORDER BY native_app_opened_at DESC`),
     ]);
 
     res.json({
       pwaInstalls: parseInt(installs.rows[0].count),
       pushSubscribers: parseInt(pushSubs.rows[0].count),
+      nativeAppOpens: parseInt(nativeOpens.rows[0].count),
       installUsers: installUsers.rows,
       pushUsers: pushUsers.rows,
+      nativeUsers: nativeUsers.rows,
     });
   } catch (err) {
     console.error(err);

@@ -148,6 +148,27 @@ router.post('/track-install', requireAuth, async (req, res) => {
 });
 
 // ----------------------------------------------------------------
+// POST /api/push/track-native-open
+// Records the first time this user opens the native iOS/Android app
+// - fired unconditionally on native platform load, independent of
+// whether they grant notification permission (unlike
+// apns_device_token, which only gets set if they say yes). This is
+// the true "has this person actually got the app installed and
+// opened it" signal.
+// ----------------------------------------------------------------
+router.post('/track-native-open', requireAuth, async (req, res) => {
+  try {
+    await pool.query(
+      `UPDATE users SET native_app_opened_at = COALESCE(native_app_opened_at, NOW()) WHERE id = $1`,
+      [req.user.id]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to track native app open' });
+  }
+});
+
+// ----------------------------------------------------------------
 // POST /api/push/register-device
 // Saves the APNs device token for the native iOS app. Separate from
 // /subscribe above, which is the web-push (VAPID) path — a user can
