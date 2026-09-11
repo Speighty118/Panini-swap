@@ -235,6 +235,24 @@
 
     <div class="card" style="margin-bottom:16px">
       <div class="card-header">
+        <h2>🚀 iOS launch email campaign</h2>
+        <button class="btn-small btn-secondary" onclick="loadLaunchEmailProgress()">Refresh</button>
+      </div>
+      <p style="padding:10px 18px 0;font-size:13px;color:#6B7280;margin:0">
+        Sends the branded "the app is here" email to verified users who haven't had it yet — waiting-list sign-ups and most-recently-active first. Each batch defaults to 80 (keeping ~20/day headroom under Resend's 100/day free limit for password resets, verification, and swap emails). Safe to run once a day until "remaining" hits 0.
+      </p>
+      <div class="stats-grid" style="padding:12px 18px 4px">
+        <div class="stat-card"><div class="stat-label">Sent so far</div><div class="stat-value" id="ile-sent">—</div></div>
+        <div class="stat-card"><div class="stat-label">Remaining</div><div class="stat-value" id="ile-remaining">—</div></div>
+      </div>
+      <div style="padding:8px 18px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <button class="btn-small btn-primary" onclick="sendLaunchEmailBatch()" id="ile-sendBtn">Send next batch (up to 80)</button>
+        <span id="ile-result" style="font-size:13px;color:#6B7280"></span>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-header">
         <h2>📲 App Store link clicks</h2>
         <button class="btn-small btn-secondary" onclick="loadAppStoreClicks()">Refresh</button>
       </div>
@@ -2018,6 +2036,7 @@ async function loadOverview() {
   loadErrorLog();
   loadAnnouncements();
   loadAppStoreClicks();
+  loadLaunchEmailProgress();
   try {
     const d = await adminFetch('/admin/overview');
     document.getElementById('stat-total-users').textContent = d.users.total_users;
@@ -2029,6 +2048,33 @@ async function loadOverview() {
     document.getElementById('stat-active-swaps').textContent = d.swaps.active;
     document.getElementById('stat-matches').textContent = d.matches.pending_matches;
   } catch(e) { console.error('overview', e); }
+}
+
+async function loadLaunchEmailProgress() {
+  try {
+    const d = await adminFetch('/app-launch/admin/launch-email-progress');
+    document.getElementById('ile-sent').textContent = d.sent;
+    document.getElementById('ile-remaining').textContent = d.remaining;
+    document.getElementById('ile-sendBtn').disabled = d.remaining === 0;
+    if (d.remaining === 0) document.getElementById('ile-sendBtn').textContent = 'All sent ✓';
+  } catch(e) { console.error('launch email progress', e); }
+}
+
+async function sendLaunchEmailBatch() {
+  const btn = document.getElementById('ile-sendBtn');
+  const resultEl = document.getElementById('ile-result');
+  btn.disabled = true;
+  resultEl.textContent = 'Sending…';
+  try {
+    const d = await adminFetch('/app-launch/admin/send-launch-batch', { method: 'POST', body: JSON.stringify({ limit: 80 }) });
+    resultEl.textContent = `Sent ${d.sent} of ${d.batchSize}${d.failed ? ` (${d.failed} failed)` : ''} — ${d.remaining} left.`;
+    document.getElementById('ile-sent').textContent = parseInt(document.getElementById('ile-sent').textContent || '0', 10) + d.sent;
+    document.getElementById('ile-remaining').textContent = d.remaining;
+    if (d.remaining === 0) btn.textContent = 'All sent ✓'; else btn.disabled = false;
+  } catch(e) {
+    resultEl.textContent = 'Failed to send: ' + e.message;
+    btn.disabled = false;
+  }
 }
 
 async function loadAppStoreClicks() {

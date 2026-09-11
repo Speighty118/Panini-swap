@@ -140,18 +140,92 @@ router.get('/admin/click-stats', requireAdmin, async (req, res) => {
   }
 });
 
+// ----------------------------------------------------------------
+// GET /api/app-launch/admin/launch-email-progress
+// How the iOS-launch email campaign is going: sent so far, how many
+// verified users are still left to reach.
+// ----------------------------------------------------------------
+router.get('/admin/launch-email-progress', requireAdmin, async (req, res) => {
+  try {
+    const [sentRes, remainingRes] = await Promise.all([
+      pool.query(`SELECT COUNT(*) FROM users WHERE ios_launch_email_sent_at IS NOT NULL`),
+      pool.query(`
+        SELECT COUNT(*) FROM users
+        WHERE is_suspended = FALSE AND email_verified = TRUE AND ios_launch_email_sent_at IS NULL
+      `),
+    ]);
+    res.json({
+      sent: parseInt(sentRes.rows[0].count, 10),
+      remaining: parseInt(remainingRes.rows[0].count, 10),
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to load campaign progress' });
+  }
+});
+
+// ----------------------------------------------------------------
+// POST /api/app-launch/admin/send-launch-batch
+// Sends the iOS-launch email to the next batch of verified users who
+// haven't had it yet, most-likely-to-act-on-it first: people who
+// explicitly asked to be notified, then most-recently-active. Body:
+// { limit } — defaults to 80, deliberately under Resend's 100/day
+// free-tier cap so there's daily headroom left for transactional
+// email (password resets, verification, swap notifications).
+// Safe to call once a day until "remaining" hits 0.
+// ----------------------------------------------------------------
+router.post('/admin/send-launch-batch', requireAdmin, async (req, res) => {
+  const limit = Math.min(parseInt(req.body?.limit, 10) || 80, 200);
+  try {
+    const { rows: batch } = await pool.query(
+      `SELECT id, name, email FROM users
+       WHERE is_suspended = FALSE AND email_verified = TRUE AND ios_launch_email_sent_at IS NULL
+       ORDER BY notify_app_launch DESC, last_login_at DESC NULLS LAST
+       LIMIT $1`,
+      [limit]
+    );
+
+    let sent = 0;
+    const failed = [];
+    for (const user of batch) {
+      try {
+        await sendAppLaunchEmail(user.email, user.name);
+        await pool.query(
+          `UPDATE users SET ios_launch_email_sent_at = NOW(), notify_app_launch = FALSE WHERE id = $1`,
+          [user.id]
+        );
+        sent++;
+      } catch (err) {
+        console.error(`iOS launch email failed for user ${user.id}:`, err.message);
+        failed.push(user.id);
+      }
+    }
+
+    const { rows: remainingRows } = await pool.query(
+      `SELECT COUNT(*) FROM users WHERE is_suspended = FALSE AND email_verified = TRUE AND ios_launch_email_sent_at IS NULL`
+    );
+
+    res.json({ sent, failed: failed.length, batchSize: batch.length, remaining: parseInt(remainingRows[0].count, 10) });
+  } catch (err) {
+    console.error('iOS launch batch send error:', err.message);
+    res.status(500).json({ error: 'Failed to send batch' });
+  }
+});
+
 // POST /api/app-launch/admin/announce-launch — emails everyone who
 // registered interest, then clears the flag.
 router.post('/admin/announce-launch', requireAdmin, async (req, res) => {
   try {
+    // Skip anyone already covered by the broader launch-email batch
+    // campaign below, so this button and that one can't double-send.
     const { rows: interested } = await pool.query(
-      `SELECT id, name, email FROM users WHERE notify_app_launch = TRUE`
+      `SELECT id, name, email FROM users WHERE notify_app_launch = TRUE AND ios_launch_email_sent_at IS NULL`
     );
 
     let sent = 0;
     for (const user of interested) {
       try {
         await sendAppLaunchEmail(user.email, user.name);
+        await pool.query(`UPDATE users SET ios_launch_email_sent_at = NOW() WHERE id = $1`, [user.id]);
         sent++;
       } catch (err) {
         console.error(`App launch email failed for user ${user.id}:`, err.message);

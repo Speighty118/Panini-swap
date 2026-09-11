@@ -243,16 +243,24 @@ async function sendAndroidTesterRecruitmentEmail(toEmail, name, signupUrl) {
   });
 }
 
+const IOS_APP_STORE_URL = 'https://apps.apple.com/app/got-one-spare/id6794436890';
+
 async function sendAppLaunchEmail(toEmail, name) {
   return resend.emails.send({
     from: FROM_EMAIL,
     to: toEmail,
-    subject: '📱 The Got One Spare app is here!',
+    subject: '📱 The Got One Spare? app is here!',
     html: emailWrapper(`
-      <h2 style="color: #0B1120; font-size: 20px; margin: 0 0 16px;">📱 We're live on iOS and Android!</h2>
+      <h2 style="color: #0B1120; font-size: 20px; margin: 0 0 16px;">📱 It's here — download now</h2>
       <p style="color: #444; line-height: 1.6; margin: 0 0 12px;">Hi ${name},</p>
-      <p style="color: #444; line-height: 1.6; margin: 0 0 16px;">You asked us to let you know — the Got One Spare app is now available to download, with instant push notifications for matches, swaps, and messages.</p>
-      ${ctaButton('Get the app →', `${SITE_URL}`)}
+      <p style="color: #444; line-height: 1.6; margin: 0 0 16px;">The Got One Spare? iOS app is officially live on the App Store — swap stickers straight from your phone, with instant notifications the moment someone matches with you or accepts a swap.</p>
+      <div style="background: #ECFDF5; border: 1px solid #6EE7B7; border-radius: 4px; padding: 14px 16px; margin: 16px 0;">
+        <div style="font-size: 13px; font-weight: 700; color: #065F46;">Your account carries straight over</div>
+        <div style="font-size: 12px; color: #065F46; margin-top: 4px;">Log in with the same email and password — your spares, needs, matches, and swap history are all already there.</div>
+      </div>
+      <p style="color: #444; line-height: 1.6; margin: 0 0 16px;">While you're at it — we've also just launched <strong>Premier League Trading Cards 2026/27</strong>, a brand new collection you can swap alongside your stickers.</p>
+      ${ctaButton('Download on the App Store →', IOS_APP_STORE_URL)}
+      <p style="color: #999; font-size: 12px; margin-top: 16px;">Android version is coming soon — we'll email you the moment it's ready.</p>
     `),
   });
 }
