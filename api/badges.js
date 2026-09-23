@@ -9,6 +9,7 @@ const { Pool } = require('pg');
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 const BADGE_META = {
+  community_builder: { label: 'Community Builder', description: 'Helped a new verified collector add spares and missing items' },
   verified_postage: { label: '📬 Verified Postage', description: 'Uploaded proof of postage on a swap' },
   swap_streak_3:    { label: '🔥 On a Roll', description: 'Completed 3 swaps in a row with positive ratings' },
   swap_streak_5:    { label: '⚡ Hot Streak', description: 'Completed 5 swaps in a row with positive ratings' },

@@ -143,6 +143,7 @@ app.use(generalLimiter);
 app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/albums', albumRoutes);
 app.use('/api/stickers', stickerRoutes);
+app.use('/api/collection-invitations', rateLimit({ windowMs: 60 * 1000, max: 60 }), require('./api/collection_invitations'));
 app.use('/api/swaps', swapRoutes);
 app.use('/api/swaps/:swapId/messages', messageRoutes);
 app.use('/api/ratings', ratingRoutes);

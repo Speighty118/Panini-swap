@@ -142,6 +142,12 @@ router.post('/signup', async (req, res) => {
     );
 
     const user = rows[0];
+    // Optional collection attribution never replaces signup gates or the existing XP referral.
+    if (req.body.collectionInvitation) {
+      try { await require('./collection_invitations').recordSignup(user.id, req.body.collectionInvitation); }
+      catch (err) { console.error('Collection attribution unavailable:', err.message); }
+    }
+
 
     // Mark invite code as used
     if (process.env.INVITE_ONLY === 'true' && inviteCode) {
