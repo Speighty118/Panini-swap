@@ -15,11 +15,11 @@
   .login h1 { font-size: 22px; font-weight: 800; margin-bottom: 6px; color: #0B1120; }
   .login p { font-size: 13px; color: #9CA3AF; margin-bottom: 20px; }
   input[type=text], input[type=password], input[type=number], textarea, select { width: 100%; padding: 12px 14px; margin-bottom: 10px; border: 1.5px solid #e8e8e4; border-radius: 8px; font-size: 14px; font-family: inherit; outline: none; background: white; }
-  input:focus, textarea:focus { border-color: #1AAB8A; }
+  input:focus, textarea:focus { border-color: #2878DC; }
 
   /* BUTTONS */
   button { cursor: pointer; border: none; border-radius: 8px; padding: 10px 16px; font-size: 13px; font-weight: 600; font-family: inherit; }
-  .btn-primary { background: #1AAB8A; color: white; }
+  .btn-primary { background: #2878DC; color: white; }
   .btn-danger { background: #EF4444; color: white; }
   .btn-secondary { background: white; color: #0B1120; border: 1px solid #e8e8e4; }
   .btn-small { padding: 5px 12px; font-size: 12px; }
@@ -51,10 +51,10 @@
   .bottom-nav-wrap { position: fixed; bottom: 0; left: 0; right: 0; z-index: 100; background: #0B1120; border-top: 1px solid rgba(255,255,255,0.08); }
   .bottom-nav { position: static; max-width: 680px; margin: 0 auto; }
   .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 0; cursor: pointer; border: none; background: none; border-top: 2px solid transparent; font-family: inherit; }
-  .nav-item.active { border-top-color: #1AAB8A; }
+  .nav-item.active { border-top-color: #2878DC; }
   .nav-icon { font-size: 18px; line-height: 1; }
   .nav-label { font-size: 9px; font-weight: 700; color: rgba(255,255,255,0.35); letter-spacing: 0.03em; }
-  .nav-item.active .nav-label { color: #1AAB8A; }
+  .nav-item.active .nav-label { color: #2878DC; }
 
   /* CONTENT AREA */
   .content { padding: 16px 14px 100px; }
@@ -68,7 +68,7 @@
   @media (min-width: 480px) { .stats-grid { grid-template-columns: repeat(4, 1fr); } }
   .stat-card { background: white; border-radius: 10px; padding: 14px 16px; border: 1px solid #e8e8e4; }
   .stat-label { font-size: 10px; font-weight: 700; color: #9CA3AF; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
-  .stat-value { font-size: 26px; font-weight: 900; color: #1AAB8A; }
+  .stat-value { font-size: 26px; font-weight: 900; color: #2878DC; }
   .stat-sub { font-size: 11px; color: #9CA3AF; margin-top: 3px; }
 
   /* CARDS */
@@ -86,7 +86,7 @@
 
   /* BADGES */
   .badge { display: inline-block; padding: 2px 7px; border-radius: 10px; font-size: 10px; font-weight: 700; }
-  .badge-green { background: #D1FAE5; color: #065F46; }
+  .badge-green { background: #E6F0FF; color: #195FAE; }
   .badge-red { background: #FEE2E2; color: #991B1B; }
   .badge-amber { background: #FEF3C7; color: #92400E; }
   .badge-grey { background: #F3F4F6; color: #6B7280; }
@@ -120,16 +120,79 @@
   select { padding: 6px 10px; border-radius: 6px; border: 1px solid #e8e8e4; font-size: 13px; background: white; font-family: inherit; }
   .analytics-user { font-size: 11px; color: #9CA3AF; }
   @keyframes pulse { 0%,100% { transform: scale(1); opacity:1; } 50% { transform: scale(1.3); opacity:0.7; } }
+
+  :root { --navy:#082d58; --blue:#2878dc; --yellow:#ffcf25; --line:#dce6f2; --muted:#61758e; }
+  body { background:#f1f5fb; color:var(--navy); line-height:1.5; }
+  #dashboard { max-width:1120px; }
+  .app-header { background:#fff; color:var(--navy); height:calc(76px + env(safe-area-inset-top)); border-bottom:1px solid var(--line); padding-left:22px;padding-right:22px; }
+  .app-header-title { font-size:21px;font-weight:900;letter-spacing:-.8px; }
+  .app-header-title b { color:var(--blue); }
+  .app-header-sub { color:var(--muted);font-weight:600;font-size:12px; }
+  .content { padding:22px 18px calc(105px + env(safe-area-inset-bottom)); }
+  .card,.stat-card { border:1px solid var(--line);border-radius:20px;box-shadow:0 3px 12px #082d5805; }
+  .card { margin-bottom:18px;overflow:hidden; }
+  .card-header { padding:18px;border-color:var(--line); }
+  .card-header h2 { font-size:16px;color:var(--navy); }
+  .stat-card { padding:18px; } .stat-value { color:var(--navy);font-size:32px;letter-spacing:-1px; }
+  .stat-label { color:var(--muted);font-size:10px;line-height:1.4;min-height:28px; }
+  .stat-sub,.empty,.section-title { color:var(--muted); }
+  button,.btn-small,.tab { min-height:44px;border-radius:12px; }
+  .btn-primary { background:var(--yellow);color:var(--navy);font-weight:800; }
+  .btn-secondary { border-color:var(--line);color:var(--navy); }
+  input[type=text],input[type=password],input[type=number],input[type=datetime-local],textarea,select { font-size:16px!important;min-height:48px;border-radius:12px!important;border-color:var(--line)!important;color:var(--navy); }
+  input:focus,textarea:focus,select:focus { outline:2px solid var(--blue);outline-offset:2px; }
+  button:focus-visible,a:focus-visible { outline:3px solid var(--blue);outline-offset:2px; }
+  button:disabled { opacity:.55;cursor:wait; }
+  .bottom-nav-wrap { background:#fff;border-color:var(--line);box-shadow:0 -4px 25px #082d5808; }
+  .bottom-nav { background:#fff;max-width:680px;border:0;padding:7px 10px max(9px,env(safe-area-inset-bottom)); }
+  .nav-item { border:0;gap:4px;padding:5px 0;min-height:58px; }
+  .nav-icon { display:grid;place-items:center;width:44px;height:30px;border-radius:11px;color:var(--muted); }
+  .nav-icon svg { width:22px;height:22px; }
+  .nav-item.active .nav-icon { background:var(--yellow);color:var(--navy); }
+  .nav-label,.nav-item.active .nav-label { color:var(--navy);font-size:11px; }
+  .nav-item.active .nav-label { font-weight:900; }
+  .admin-hero { background:linear-gradient(120deg,#082d58,#104c79);border-radius:24px;padding:26px;color:white;margin-bottom:22px;position:relative;overflow:hidden; }
+  .admin-hero:after { content:'';position:absolute;border:24px solid #ffffff08;width:180px;height:180px;border-radius:50%;right:-75px;top:-65px;pointer-events:none; }
+  .admin-hero small { color:var(--yellow);font-weight:800;letter-spacing:2px;font-size:10px; }
+  .admin-hero h1 { font-size:30px;letter-spacing:-1px;margin:8px 0;line-height:1.15; }
+  .admin-hero p { color:#d6e6fa;font-size:14px;max-width:540px; }
+  .admin-shortcuts { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:22px; }
+  .admin-link { width:100%;background:white;color:var(--navy);border:1px solid var(--line);border-radius:18px;text-align:left;padding:18px;display:flex;align-items:center;gap:12px; }
+  .admin-link .tile-icon { background:#e9f2ff;color:var(--blue);width:42px;height:42px;flex-shrink:0;border-radius:13px;display:grid;place-items:center; }
+  .tile-icon svg { width:22px;height:22px; }
+  .admin-link strong { display:block;font-size:14px; } .admin-link small { display:block;font-size:12px;color:var(--muted);font-weight:400;margin-top:3px; }
+  .admin-link:hover { border-color:var(--blue); }
+  .panel-title { font-size:24px;letter-spacing:-.6px;margin:0 0 18px; }
+  .badge-green { background:#e4efff;color:#195fae; }
+  th { color:var(--muted);background:#f4f8fd; } td { padding:14px; }
+  .login { background:white;border:1px solid var(--line);border-radius:24px;margin:10vh auto;padding:30px;box-shadow:0 16px 60px #082d5812; }
+  .login h1 { color:var(--navy); } .login p { color:var(--muted); }
+  #loginBtn { background:var(--yellow)!important;color:var(--navy)!important;min-height:48px;border-radius:12px!important; }
+  .archive-note { padding:18px;background:#fff7d5;border-radius:16px;margin-bottom:18px;font-size:13px; }
+  @media(max-width:600px) {
+    .admin-shortcuts { grid-template-columns:1fr; }
+    #overviewStats { grid-template-columns:repeat(2,minmax(0,1fr)); }
+    #panel-messages > div[style*="grid"] { grid-template-columns:1fr!important; }
+    table.mobile-cards { min-width:0!important;display:block; } table.mobile-cards thead { position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%); }
+    table.mobile-cards tbody,table.mobile-cards tr { display:block; }
+    table.mobile-cards tr { padding:12px 16px;border-bottom:1px solid var(--line); }
+    table.mobile-cards td { display:flex;gap:14px;justify-content:space-between;align-items:center;white-space:normal!important;overflow-wrap:anywhere;padding:7px 0;border:0;min-width:0!important; }
+    table.mobile-cards td:before { content:attr(data-label);font-size:11px;color:var(--muted);font-weight:700;min-width:85px; }
+    table.mobile-cards td[colspan]:before { display:none; }
+    .filter-bar { align-items:stretch; } .filter-bar input,.filter-bar select { flex:1;min-width:130px; }
+    .card-header input { flex-basis:100%; }
+  }
+
 </style>
 </head>
 <body>
 
 <div id="login" class="login">
   <!-- v7 -->
-  <h1>⚙️ Admin</h1>
-  <p>Got One Spare? — Admin Dashboard</p>
+  <h1>Got One Spare?</h1>
+  <p>Got One Spare? — Your collector community</p>
   <input type="text" id="secretInput" placeholder="Admin secret" style="-webkit-text-security:disc" />
-  <a href="#" id="loginBtn" style="display:block;width:100%;padding:13px 0;background:#1AAB8A;color:white;text-align:center;border-radius:8px;font-weight:700;font-size:15px;text-decoration:none;box-sizing:border-box;margin-bottom:10px">Sign In</a>
+  <a href="#" id="loginBtn" style="display:block;width:100%;padding:13px 0;background:#2878DC;color:white;text-align:center;border-radius:8px;font-weight:700;font-size:15px;text-decoration:none;box-sizing:border-box;margin-bottom:10px">Sign In</a>
   <div id="loginError" style="min-height:20px;font-size:13px;color:#EF4444;word-break:break-all"></div>
 </div>
 
@@ -137,8 +200,8 @@
   <!-- TOP HEADER -->
   <div class="app-header">
     <div>
-      <div class="app-header-title">⚙️ Got One Spare?</div>
-      <div class="app-header-sub">Admin Dashboard</div>
+      <div class="app-header-title">Got One Spare<b>?</b></div>
+      <div class="app-header-sub">Your collector community</div>
     </div>
     <button class="btn-secondary btn-small" id="refreshBtn" onclick="handleRefresh()">↻ Refresh</button>
   </div>
@@ -297,13 +360,13 @@
         <div style="display:flex;gap:10px;align-items:center">
           <button class="btn-primary" onclick="sendBroadcast()">Send to all users</button>
           <button class="btn-small btn-secondary" onclick="testBroadcastPush()" style="margin-left:8px">🔔 Test push (to you only)</button>
-          <span id="broadcastResult" style="font-size:13px;color:#1AAB8A"></span>
+          <span id="broadcastResult" style="font-size:13px;color:#2878DC"></span>
         </div>
         <div style="border-top:1px solid #F3F4F6;margin-top:6px;padding-top:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
           <label style="font-size:13px;color:#6B7280">Or schedule for:</label>
           <input type="datetime-local" id="scheduleSendAt" style="margin:0;width:auto" />
           <button class="btn-small btn-primary" onclick="scheduleAnnouncement()">Schedule</button>
-          <span id="scheduleResult" style="font-size:13px;color:#1AAB8A"></span>
+          <span id="scheduleResult" style="font-size:13px;color:#2878DC"></span>
         </div>
         <div id="scheduledAnnouncementsList"></div>
       </div>
@@ -385,7 +448,7 @@
     <div class="card">
       <div class="card-header">
         <h2>All users</h2>
-        <input type="text" id="userSearch" placeholder="Search name or email…" oninput="filterUsers()" />
+        <input type="text" id="userSearch" placeholder="Search name or email…" oninput="filterUsers()" /><div style="display:flex;gap:8px;margin-top:10px"><select aria-label="Sort users" onchange="userSortCol=this.value;filterUsers()"><option value="last_login_at">Last active</option><option value="created_at">Sign-up date</option><option value="swaps_count">Swaps</option><option value="total_sessions">Sessions</option><option value="avg_session_minutes">Average session</option><option value="login_count">Logins</option></select><select aria-label="Sort direction" onchange="userSortDir=this.value;filterUsers()"><option value="desc">Highest / newest first</option><option value="asc">Lowest / oldest first</option></select></div>
       </div>
       <div id="usersTable"></div>
     </div>
@@ -420,9 +483,9 @@
           <div id="msgDropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:white;border:1px solid #E5E7EB;border-radius:8px;max-height:220px;overflow-y:auto;z-index:100;box-shadow:0 4px 12px rgba(0,0,0,0.1);margin-top:2px"></div>
         </div>
         <input id="msgRecipientId" type="hidden" />
-        <div id="msgSelectedUser" style="display:none;padding:8px 12px;background:#F0FDF4;border:1px solid #A7F3D0;border-radius:8px;font-size:13px;color:#065F46;display:flex;align-items:center;justify-content:space-between">
+        <div id="msgSelectedUser" style="display:none;padding:8px 12px;background:#E6F0FF;border:1px solid #C9DCF5;border-radius:8px;font-size:13px;color:#195FAE;align-items:center;justify-content:space-between">
           <span id="msgSelectedName"></span>
-          <button onclick="clearMsgUser()" style="font-size:16px;color:#065F46;background:none;border:none;cursor:pointer;line-height:1">×</button>
+          <button onclick="clearMsgUser()" style="font-size:16px;color:#195FAE;background:none;border:none;cursor:pointer;line-height:1">×</button>
         </div>
         <textarea id="msgBody" rows="3" placeholder="Your message…" style="padding:10px 12px;border-radius:8px;border:1px solid #E5E7EB;font-size:13px;width:100%;box-sizing:border-box;font-family:inherit;resize:vertical"></textarea>
         <button class="btn-primary" onclick="adminSendMessage()">Send message</button>
@@ -497,11 +560,11 @@
         </div>
         <p style="font-size:12px;color:#6B7280;margin:0">Enter the person's name first, then click Generate. The code copies to your clipboard automatically so you can paste it straight into your message.</p>
       </div>
-      <div id="generatedCode" style="display:none;padding:12px 18px;background:#D1FAE5;border-top:1px solid rgba(0,0,0,0.06)">
-        <span style="font-size:13px;color:#065F46">✓ Code generated and copied: </span>
+      <div id="generatedCode" style="display:none;padding:12px 18px;background:#E6F0FF;border-top:1px solid rgba(0,0,0,0.06)">
+        <span style="font-size:13px;color:#195FAE">✓ Code generated and copied: </span>
         <strong id="generatedCodeValue" style="font-family:monospace;font-size:16px;letter-spacing:0.15em"></strong>
-        <span style="font-size:13px;color:#065F46"> for </span>
-        <strong id="generatedCodeName" style="font-size:13px;color:#065F46"></strong>
+        <span style="font-size:13px;color:#195FAE"> for </span>
+        <strong id="generatedCodeName" style="font-size:13px;color:#195FAE"></strong>
       </div>
     </div>
     <div class="card">
@@ -553,14 +616,33 @@
       </p>
       <div style="padding:14px 18px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;border-bottom:1px solid #F3F4F6">
         <button class="btn-small btn-primary" onclick="sendRecruitmentEmail()" id="androidTestersEmailBtn">📧 Email all users to recruit more</button>
-        <span id="androidTestersEmailResult" style="font-size:13px;color:#1AAB8A"></span>
+        <span id="androidTestersEmailResult" style="font-size:13px;color:#2878DC"></span>
       </div>
       <div style="padding:14px 18px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
         <button class="btn-small" onclick="notifySelectedTesters()" id="androidTestersNotifyBtn" disabled>Remind selected to check their email</button>
         <button class="btn-small btn-secondary" onclick="markSelectedReminded()" id="androidTestersMarkBtn" disabled>Mark selected as already contacted</button>
-        <span id="androidTestersNotifyResult" style="font-size:13px;color:#1AAB8A"></span>
+        <span id="androidTestersNotifyResult" style="font-size:13px;color:#2878DC"></span>
       </div>
       <div id="androidTestersList"></div>
+    </div>
+  </div>
+
+  <!-- COLLECTION SHARING -->
+  <div id="panel-sharing" class="panel">
+    <div class="card" style="background:#082D58;color:white;padding:24px">
+      <div style="font-size:12px;letter-spacing:2px;color:#FFCF25;font-weight:800">COMMUNITY GROWTH</div>
+      <h2 style="margin:8px 0">Collection sharing</h2>
+      <p style="margin:0;color:#d8e7fa">See how shared collections bring new collectors into the community.</p>
+    </div>
+    <div class="card" style="padding:16px;display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+      <label>Period <select id="sharingDays" onchange="loadSharingStats()"><option value="7">Last 7 days</option><option value="30" selected>Last 30 days</option><option value="90">Last 90 days</option><option value="all">Since launch</option></select></label>
+      <label>Collection <select id="sharingAlbum" onchange="loadSharingStats()"><option value="">All collections</option></select></label>
+      <button class="btn-small btn-secondary" onclick="loadSharingStats()">Refresh</button>
+    </div>
+    <div id="sharingResults" aria-live="polite"></div>
+    <div class="card" style="padding:18px;color:#64748b;font-size:13px;line-height:1.6">
+      Period filters use link creation and attributed sign-up dates. Qualified collectors are those sign-ups whose qualification has been recorded, even if it happened later. Active links and badge holders are current totals for the selected collection. Badges are global: collection rows cannot be added together to count unique badge holders.<br>
+      Qualification is recorded when the sharer opens their sharing panel, so recent activity may take time to appear. Revoked links retain their sign-up history. Visits, installs and actual social posts are not tracked; creating a link does not prove it was shared. Dates use UK time.
     </div>
   </div>
 
@@ -650,9 +732,9 @@
       <span class="nav-icon">🔄</span>
       <span class="nav-label">Swaps</span>
     </button>
-    <button class="nav-item" onclick="showTab('messages')">
-      <span class="nav-icon">💬</span>
-      <span class="nav-label">Messages</span>
+    <button class="nav-item" onclick="showTab('growth')">
+      <span class="nav-icon">↗</span>
+      <span class="nav-label">Growth</span>
     </button>
     <button class="nav-item" onclick="showTab('more')">
       <span class="nav-icon">⋯</span>
@@ -662,22 +744,7 @@
 </div>
 
 <!-- MORE PANEL (hidden tab for additional sections) -->
-<div id="panel-more" class="panel" style="padding:0">
-  <div class="content" style="padding-top:0">
-    <div class="section-title" style="padding-top:16px">More sections</div>
-    <div class="card">
-      <button onclick="showTab('ambassador')" style="display:flex;align-items:center;gap:12px;width:100%;padding:14px;background:none;border:none;border-bottom:1px solid #f0f0f0;font-family:inherit;font-size:14px;font-weight:600;color:#0B1120;text-align:left;cursor:pointer">🏅 Ambassador requests</button>
-      <button onclick="showTab('analytics')" style="display:flex;align-items:center;gap:12px;width:100%;padding:14px;background:none;border:none;border-bottom:1px solid #f0f0f0;font-family:inherit;font-size:14px;font-weight:600;color:#0B1120;text-align:left;cursor:pointer">📊 Analytics</button>
-      <button onclick="showTab('moderation')" style="display:flex;align-items:center;gap:12px;width:100%;padding:14px;background:none;border:none;border-bottom:1px solid #f0f0f0;font-family:inherit;font-size:14px;font-weight:600;color:#0B1120;text-align:left;cursor:pointer">🛡 Moderation</button>
-      <button onclick="showTab('invites')" style="display:flex;align-items:center;gap:12px;width:100%;padding:14px;background:none;border:none;border-bottom:1px solid #f0f0f0;font-family:inherit;font-size:14px;font-weight:600;color:#0B1120;text-align:left;cursor:pointer">🎟 Invite Codes</button>
-      <button onclick="showTab('feedback')" style="display:flex;align-items:center;gap:12px;width:100%;padding:14px;background:none;border:none;border-bottom:1px solid #f0f0f0;font-family:inherit;font-size:14px;font-weight:600;color:#0B1120;text-align:left;cursor:pointer">💬 Feedback</button>
-      <button onclick="showTab('donations')" style="display:flex;align-items:center;gap:12px;width:100%;padding:14px;background:none;border:none;border-bottom:1px solid #f0f0f0;font-family:inherit;font-size:14px;font-weight:600;color:#0B1120;text-align:left;cursor:pointer">🏆 Founder clicks</button>
-      <button onclick="showTab('app-launch')" style="display:flex;align-items:center;gap:12px;width:100%;padding:14px;background:none;border:none;border-bottom:1px solid #f0f0f0;font-family:inherit;font-size:14px;font-weight:600;color:#0B1120;text-align:left;cursor:pointer">📱 App launch interest</button>
-      <button onclick="showTab('android-testers')" style="display:flex;align-items:center;gap:12px;width:100%;padding:14px;background:none;border:none;border-bottom:1px solid #f0f0f0;font-family:inherit;font-size:14px;font-weight:600;color:#0B1120;text-align:left;cursor:pointer">🧪 Android testers</button>
-      <button onclick="showTab('trading-cards')" style="display:flex;align-items:center;gap:12px;width:100%;padding:14px;background:none;border:none;font-family:inherit;font-size:14px;font-weight:600;color:#0B1120;text-align:left;cursor:pointer">🃏 Trading cards</button>
-    </div>
-  </div>
-</div>
+<div id="panel-more" class="panel"><div class="content"><h1 class="panel-title">Manage your community</h1><div id="adminTools"></div></div></div>
 
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
@@ -693,28 +760,39 @@ let adminSecret = new URLSearchParams(window.location.search).get('s') || '';
 let allUsers = [];
 let modCases = [];
 
-function showTab(name) {
-  const allPanels = ['overview','analytics','users','swaps','messages','moderation','invites','feedback','donations','app-launch','android-testers','trading-cards','more'];
+async function showTab(name) {
+  const allPanels = ['sharing','overview','analytics','users','swaps','messages','moderation','invites','feedback','donations','app-launch','android-testers','trading-cards','more'];
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   const panel = document.getElementById('panel-' + name);
   if (panel) panel.classList.add('active');
 
   // Update bottom nav active state
-  const navMap = { overview: 0, users: 1, swaps: 2, messages: 3, more: 4, analytics: 4, moderation: 4, invites: 4, feedback: 4, donations: 4, 'app-launch': 4, 'android-testers': 4, 'trading-cards': 4 };
+  const navMap = { growth: 3, sharing: 3, communications:4, maintenance:4, archive:4, overview: 0, users: 1, swaps: 2, messages: 4, more: 4, analytics: 3, moderation: 4, invites: 4, feedback: 4, donations: 4, 'app-launch': 4, 'android-testers': 4, 'trading-cards': 3 };
   document.querySelectorAll('.nav-item').forEach((item, i) => {
     item.classList.toggle('active', i === navMap[name]);
   });
 
-  if (name === 'swaps') loadSwaps();
-  if (name === 'donations') loadDonations();
-  if (name === 'app-launch') loadAppLaunch();
-  if (name === 'android-testers') loadAndroidTesters();
-  if (name === 'trading-cards') loadTradingCardsStats();
-  if (name === 'moderation') { loadModerationCases(); loadActionLog(); }
-  if (name === 'messages') loadAdminMessages();
-  if (name === 'ambassador') loadAmbassador();
+  document.querySelectorAll('.nav-item').forEach(item => item.setAttribute('aria-current', item.classList.contains('active') ? 'page' : 'false'));
+  window.scrollTo({top:0,behavior:'instant'});
+  if (name === 'overview') await loadOverview();
+  if (name === 'users') await loadUsers();
+  if (name === 'feedback') {await loadFeedback();await loadPwaStats();}
+  if (name === 'invites') await loadInvites();
+  if (name === 'growth') await loadAppStoreClicks();
+  if (name === 'communications') {await loadAnnouncements();await loadScheduledAnnouncements();}
+  if (name === 'maintenance') {await loadHealth();await loadErrorLog();}
+  if (name === 'archive') {await loadPL2026();await loadLaunchEmailProgress();}
+  if (name === 'swaps') await loadSwaps();
+  if (name === 'donations') await loadDonations();
+  if (name === 'app-launch') await loadAppLaunch();
+  if (name === 'android-testers') await loadAndroidTesters();
+  if (name === 'trading-cards') await loadTradingCardsStats();
+  if (name === 'sharing') await loadSharingStats();
+  if (name === 'moderation') { await loadModerationCases(); await loadActionLog(); }
+  if (name === 'messages') { await loadUsers(); await loadAdminMessages(); }
+  if (name === 'ambassador') await loadAmbassador();
   if (name === 'analytics') {
-    loadAnalytics();
+    await loadAnalytics();
     setTimeout(() => { if (leafletMap) leafletMap.invalidateSize(); }, 100);
   }
 }
@@ -756,28 +834,10 @@ async function handleRefresh() {
 }
 
 async function refreshAll() {
-  // Run all loaders independently — if one fails it shouldn't block the rest.
-  // Previously a single failing endpoint (e.g. analytics) would silently
-  // cause the whole refresh to appear to do nothing.
-  await Promise.allSettled([
-    loadOverview(),
-    loadUsers(),
-    loadSwaps(),
-    loadModerationCases(),
-    loadActionLog(),
-    loadInvites(),
-    loadFeedback(),
-    loadDonations(),
-    loadAnalytics(),
-    loadHealth(),
-    loadPwaStats(),
-    loadAnnouncements(),
-    loadAdminMessages(),
-    loadErrorLog(),
-    loadPL2026(),
-    loadScheduledAnnouncements(),
-  ]);
+  const name=document.querySelector('.panel.active')?.id.replace('panel-','') || 'overview';
+  await showTab(name);
 }
+
 
 function audienceLabel(targetPlatform) {
   if (targetPlatform === 'android') return 'Android web visitors';
@@ -938,7 +998,7 @@ async function loadSwaps() {
             <div style="color:#6B7280;font-size:11px">${e(s.user_b_email)}</div>
           </td>
           <td style="text-align:center">
-            <div style="font-size:20px;font-weight:700;color:#1AAB8A">${s.total_stickers || '—'}</div>
+            <div style="font-size:20px;font-weight:700;color:#2878DC">${s.total_stickers || '—'}</div>
             <div style="font-size:11px;color:#9CA3AF">${s.total_stickers > 0 ? `${s.a_gives} ↔ ${s.b_gives}` : 'confirmed on accept'}</div>
           </td>
           <td><span class="badge ${statusBadge}">${statusLabel}</span></td>
@@ -977,7 +1037,7 @@ async function loadAdminMessages() {
 
     document.getElementById('reportedMsgCount').textContent = `${reported.length} reports`;
     const repEl = document.getElementById('reportedMsgList');
-    if (!reported.length) { repEl.innerHTML = '<div class="empty">No reported messages. ✅</div>'; }
+    if (!reported.length) { repEl.innerHTML = '<div class="empty">No reported messages.</div>'; }
     else {
       repEl.innerHTML = reported.map(m => `
         <div style="padding:12px 16px;border-bottom:1px solid rgba(0,0,0,0.05)">
@@ -1063,7 +1123,7 @@ async function adminSendMessage() {
     await adminFetch('/admin/messages/send', { method: 'POST', body: JSON.stringify({ recipientId: parseInt(recipientId), body }) });
     clearMsgUser();
     document.getElementById('msgBody').value = '';
-    result.style.color = '#065F46';
+    result.style.color = '#195FAE';
     result.textContent = '✓ Message sent!';
     setTimeout(() => { result.textContent = ''; }, 3000);
   } catch(err) {
@@ -1259,6 +1319,30 @@ async function sendRecruitmentEmail() {
 
 let signupChartInstance = null;
 let dauChartInstance = null;
+let sharingRequest = 0;
+async function loadSharingStats() {
+ const sequence = ++sharingRequest;
+ const host = document.getElementById('sharingResults');
+ host.innerHTML = '<div class="empty">Loading sharing statistics…</div>';
+ const album = document.getElementById('sharingAlbum');
+ const escape = value => String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+ try {
+  const data = await adminFetch('/admin/collection-sharing-stats?'+new URLSearchParams({days:document.getElementById('sharingDays').value,albumId:album.value}));
+  if(sequence !== sharingRequest) return;
+  const selected = album.value;
+  album.innerHTML = '<option value="">All collections</option>'+data.albumChoices.map(a=>`<option value="${Number(a.id)}">${escape(a.name)}</option>`).join('');
+  album.value = selected;
+  const t=data.totals;
+  const metrics=[['Links created',t.links_created],['Collectors creating links',t.sharers],['Attributed sign-ups',t.signups],['Qualified collectors',t.qualified],['Active links · current',t.active_links],['Badge holders · current',t.badge_holders]];
+  const table=(title,heads,rows)=>`<div class="card"><div class="card-header"><h2>${title}</h2></div><div style="overflow:auto"><table><thead><tr>${heads.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.length?rows.map(r=>`<tr>${r.map(c=>`<td>${escape(c)}</td>`).join('')}</tr>`).join(''):`<tr><td colspan="${heads.length}" class="empty">No sharing activity in this period yet.</td></tr>`}</tbody></table></div></div>`;
+  host.innerHTML = '<div class="stats-grid">'+metrics.map(([label,value])=>`<div class="stat-card"><div class="stat-label">${label}</div><div class="stat-value" style="color:#082D58">${Number(value).toLocaleString()}</div></div>`).join('')+'</div>'+
+   `<div class="card" style="padding:18px"><strong>${t.signups?Math.round(t.qualified/t.signups*100)+'%':'—'} of attributed sign-ups qualified</strong><p style="margin:6px 0 0;color:#64748b">Verified collectors who added spares and missing items for the invited collection.</p></div>`+
+   table('By collection',['Collection','Links','Sign-ups','Qualified'],data.albums.map(a=>[a.name,a.links_created,a.signups,a.qualified]))+
+   table('Top sharers',['Collector','Sign-ups','Qualified'],data.leaders.map(u=>[u.name,u.signups,u.qualified]))+
+   table('Activity timeline',['Date','Links created','Sign-ups'],data.daily.map(d=>[d.day,d.links,d.signups]));
+ } catch(error) { if(sequence===sharingRequest)host.innerHTML='<div class="empty">Unable to load sharing statistics. Please try Refresh.</div>'; }
+}
+
 let tradingCardsChartInstance = null;
 
 function drawBarChart(canvasId, labels, data, label, colour, instanceRef) {
@@ -1302,7 +1386,7 @@ async function loadSignupChart() {
     drawBarChart('signupChart',
       data.map(d => new Date(d.date).toLocaleDateString('en-GB', { day:'numeric', month:'short' })),
       data.map(d => d.count),
-      'New signups', '#1AAB8A', ref
+      'New signups', '#2878DC', ref
     );
     signupChartInstance = ref.current;
   } catch(e) { console.error('signup chart', e); }
@@ -1352,7 +1436,7 @@ async function loadTradingCardsStats() {
           data: {
             labels: data.dailyActivity.map(d => new Date(d.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })),
             datasets: [
-              { label: 'New spares', data: data.dailyActivity.map(d => parseInt(d.new_spares)), backgroundColor: '#1AAB8A', borderRadius: 4 },
+              { label: 'New spares', data: data.dailyActivity.map(d => parseInt(d.new_spares)), backgroundColor: '#2878DC', borderRadius: 4 },
               { label: 'New needs', data: data.dailyActivity.map(d => parseInt(d.new_needs)), backgroundColor: '#6366F1', borderRadius: 4 },
             ],
           },
@@ -1382,7 +1466,7 @@ async function loadTradingCardsStats() {
             <span style="color:#6B7280">${t.spares} spare${t.spares == 1 ? '' : 's'} · ${t.needs} need${t.needs == 1 ? '' : 's'}</span>
           </div>
           <div style="background:#F3F4F6;border-radius:4px;height:6px;overflow:hidden">
-            <div style="background:#1AAB8A;height:100%;width:${pct}%"></div>
+            <div style="background:#2878DC;height:100%;width:${pct}%"></div>
           </div>
         </div>`;
       }).join('');
@@ -1397,7 +1481,7 @@ async function loadSwapFunnelChart() {
   try {
     const data = await adminFetch('/admin/swap-funnel');
     const el = document.getElementById('swapFunnel');
-    const colours = { proposed:'#F59E0B', accepted:'#6366F1', posted:'#3B82F6', completed:'#1AAB8A', declined:'#9CA3AF', disputed:'#EF4444' };
+    const colours = { proposed:'#F59E0B', accepted:'#6366F1', posted:'#3B82F6', completed:'#2878DC', declined:'#9CA3AF', disputed:'#EF4444' };
     const max = Math.max(...data.map(d => parseInt(d.count)), 1);
     el.innerHTML = data.map(d => `
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
@@ -1424,10 +1508,10 @@ async function loadStickerHeatmap() {
             <div style="font-size:12px;font-weight:600;color:#1A1F36">${e(s.sticker_number)} <span style="color:#6B7280;font-weight:400">${e(s.description)}</span></div>
             <div style="font-size:11px;color:#9CA3AF">${e(s.team_name)}</div>
             <div style="height:4px;background:#F3F4F6;border-radius:2px;margin-top:4px">
-              <div style="height:100%;width:${Math.round(parseInt(s[countKey])/max*100)}%;background:#1AAB8A;border-radius:2px"></div>
+              <div style="height:100%;width:${Math.round(parseInt(s[countKey])/max*100)}%;background:#2878DC;border-radius:2px"></div>
             </div>
           </div>
-          <div style="font-size:13px;font-weight:700;color:#1AAB8A;flex-shrink:0">${s[countKey]}</div>
+          <div style="font-size:13px;font-weight:700;color:#2878DC;flex-shrink:0">${s[countKey]}</div>
         </div>`).join('');
     };
     renderList(mostNeeded, 'want_count', 'want', 'mostNeeded');
@@ -1448,7 +1532,7 @@ async function loadTopTraders() {
           <div style="font-size:11px;color:#6B7280">${e(u.email)}</div>
         </div>
         <div style="text-align:right">
-          <div style="font-size:14px;font-weight:700;color:#1AAB8A">${u.completed_swaps} swaps</div>
+          <div style="font-size:14px;font-weight:700;color:#2878DC">${u.completed_swaps} swaps</div>
           ${u.avg_rating ? `<div style="font-size:11px;color:#F59E0B">${'★'.repeat(Math.round(u.avg_rating))} ${u.avg_rating}</div>` : ''}
         </div>
       </div>`).join('');
@@ -1462,7 +1546,7 @@ async function loadOldestPending() {
     if (!data.length) { el.innerHTML = '<div class="empty">No pending swaps.</div>'; return; }
     el.innerHTML = data.map(s => {
       const days = Math.round(parseFloat(s.days_old));
-      const urgency = days > 7 ? '#EF4444' : days > 3 ? '#F59E0B' : '#1AAB8A';
+      const urgency = days > 7 ? '#EF4444' : days > 3 ? '#F59E0B' : '#2878DC';
       const aAcc = s.user_a_accepted ? '✓' : '⏳';
       const bAcc = s.user_b_accepted ? '✓' : '⏳';
       return `
@@ -1543,7 +1627,7 @@ async function loadLiveMap() {
     users.forEach(u => {
       const minutesAgo = (Date.now() - new Date(u.last_login_at)) / 60000;
       const isActive = minutesAgo < 30;
-      const colour = isActive ? '#1AAB8A' : '#6B7280';
+      const colour = isActive ? '#2878DC' : '#6B7280';
       const size = isActive ? 14 : 10;
 
       const icon = L.divIcon({
@@ -1572,7 +1656,7 @@ async function loadLiveMap() {
     const active = users.filter(u => (Date.now() - new Date(u.last_login_at)) / 60000 < 30).length;
     document.getElementById('mapLegend').innerHTML =
       `<span style="display:inline-flex;align-items:center;gap:4px;margin-right:16px">
-        <span style="width:10px;height:10px;border-radius:50%;background:#1AAB8A;display:inline-block"></span>
+        <span style="width:10px;height:10px;border-radius:50%;background:#2878DC;display:inline-block"></span>
         Active last 30 min (${active})
       </span>
       <span style="display:inline-flex;align-items:center;gap:4px">
@@ -1606,7 +1690,7 @@ async function loadHealth() {
     }
 
     const STATUS_STYLES = {
-      ok:      { bg: '#D1FAE5', color: '#065F46', icon: '✅' },
+      ok:      { bg: '#E6F0FF', color: '#195FAE', icon: '✅' },
       warning: { bg: '#FEF3C7', color: '#92400E', icon: '⚠️' },
       error:   { bg: '#FEE2E2', color: '#991B1B', icon: '🚨' },
     };
@@ -1655,7 +1739,7 @@ async function postAnnouncement() {
     await adminFetch('/announcements', { method: 'POST', body: JSON.stringify({ title, body }) });
     document.getElementById('announcementTitle').value = '';
     document.getElementById('announcementBody').value = '';
-    result.style.color = '#065F46';
+    result.style.color = '#195FAE';
     result.textContent = '✓ Announcement posted! Users will see it in the What\'s new panel.';
     loadAnnouncements();
     setTimeout(() => { result.textContent = ''; }, 4000);
@@ -1962,7 +2046,7 @@ async function loadThread(userId) {
     const bubbles = messages.length
       ? messages.map(m => `
         <div style="margin-bottom:6px;text-align:${m.is_admin?'right':'left'}">
-          <div style="display:inline-block;max-width:80%;padding:6px 10px;border-radius:10px;font-size:12px;background:${m.is_admin?'#1AAB8A':'#F3F4F6'};color:${m.is_admin?'white':'#0B1120'}">
+          <div style="display:inline-block;max-width:80%;padding:6px 10px;border-radius:10px;font-size:12px;background:${m.is_admin?'#2878DC':'#F3F4F6'};color:${m.is_admin?'white':'#0B1120'}">
             ${e(m.body)}
           </div>
           <div style="font-size:10px;color:#9CA3AF;margin-top:2px">${e(m.sender_name)} · ${new Date(m.created_at).toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}</div>
@@ -2032,11 +2116,7 @@ async function loadActionLog() {
 }
 
 async function loadOverview() {
-  loadHealth();
-  loadErrorLog();
-  loadAnnouncements();
-  loadAppStoreClicks();
-  loadLaunchEmailProgress();
+
   try {
     const d = await adminFetch('/admin/overview');
     document.getElementById('stat-total-users').textContent = d.users.total_users;
@@ -2115,8 +2195,8 @@ function sortUsers(col) {
 function sortArrow(col) {
   if (userSortCol !== col) return '<span style="color:#D1D5DB;font-size:10px;margin-left:4px">⇅</span>';
   return userSortDir === 'asc'
-    ? '<span style="color:#1AAB8A;font-size:11px;margin-left:4px">▲</span>'
-    : '<span style="color:#1AAB8A;font-size:11px;margin-left:4px">▼</span>';
+    ? '<span style="color:#2878DC;font-size:11px;margin-left:4px">▲</span>'
+    : '<span style="color:#2878DC;font-size:11px;margin-left:4px">▼</span>';
 }
 
 function filterUsers() {
@@ -2148,7 +2228,7 @@ function renderUsers(users) {
   });
 
   const thStyle = 'cursor:pointer;user-select:none;white-space:nowrap';
-  const thActive = col => userSortCol === col ? `${thStyle};color:#1AAB8A;background:#F0FDF9` : thStyle;
+  const thActive = col => userSortCol === col ? `${thStyle};color:#2878DC;background:#F0FDF9` : thStyle;
 
   const rows = sorted.map(u => {
     try {
@@ -2158,7 +2238,7 @@ function renderUsers(users) {
 
       const photoHtml = u.profile_photo
         ? `<img src="${u.profile_photo}" alt="${e(u.name)}" style="width:40px;height:40px;border-radius:50%;object-fit:cover;border:2px solid var(--border)">`
-        : `<div style="width:40px;height:40px;border-radius:50%;background:#1AAB8A;color:white;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex-shrink:0">${e(initials)}</div>`;
+        : `<div style="width:40px;height:40px;border-radius:50%;background:#2878DC;color:white;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex-shrink:0">${e(initials)}</div>`;
 
       const reviewsHtml = reviews.length ? reviews.map(r => `
         <div style="margin-top:6px;padding:6px 8px;background:#F9FAFB;border-radius:6px;font-size:11px">
@@ -2188,7 +2268,7 @@ function renderUsers(users) {
             : '<span style="font-size:12px;color:#9CA3AF">No ratings</span>'
           }
           <details style="margin-top:4px">
-            <summary style="font-size:11px;color:#1AAB8A;cursor:pointer;list-style:none">
+            <summary style="font-size:11px;color:#2878DC;cursor:pointer;list-style:none">
               ${reviews.length ? `View ${reviews.length} review${reviews.length > 1 ? 's' : ''}` : 'No reviews'}
             </summary>
             ${reviewsHtml}
@@ -2196,7 +2276,7 @@ function renderUsers(users) {
         </td>
         <td style="white-space:nowrap">${u.duplicates_count || 0} spares<br><span style="font-size:11px;color:#6B7280">${u.needs_count || 0} needs</span></td>
         <td style="white-space:nowrap">
-          <span style="font-size:16px;font-weight:700;color:#1AAB8A">${u.swaps_count || 0}</span>
+          <span style="font-size:16px;font-weight:700;color:#2878DC">${u.swaps_count || 0}</span>
           <div style="font-size:11px;color:#6B7280">${u.completed_swaps || 0} completed</div>
         </td>
         <td>${u.total_sessions || 0}</td>
@@ -2349,7 +2429,7 @@ async function loadPwaStats() {
           ${(data.nativeUsers||[]).map(u => `<div style="font-size:11px;color:#555;padding:3px 0;border-bottom:1px solid #f5f5f5">${e(u.name)} <span style="color:#bbb">${e(u.email)}</span></div>`).join('') || '<div style="font-size:11px;color:#bbb">None yet</div>'}
         </div>
         <div style="flex:1;min-width:150px">
-          <div style="font-size:20px;font-weight:700;color:#1AAB8A">${data.pushSubscribers || 0}</div>
+          <div style="font-size:20px;font-weight:700;color:#2878DC">${data.pushSubscribers || 0}</div>
           <div style="font-size:11px;color:#9CA3AF;margin-bottom:8px">🔔 Push subscribers</div>
           ${(data.pushUsers||[]).map(u => `<div style="font-size:11px;color:#555;padding:3px 0;border-bottom:1px solid #f5f5f5">${e(u.name)} <span style="color:#bbb">${e(u.email)}</span></div>`).join('') || '<div style="font-size:11px;color:#bbb">None yet</div>'}
         </div>
@@ -2400,7 +2480,7 @@ async function loadFeedback() {
           <div style="display:flex;gap:8px;align-items:center">
             <button class="btn-small btn-primary" onclick="sendReply(${f.id})">Send</button>
             <button class="btn-small btn-secondary" onclick="toggleReply(${f.id})">Cancel</button>
-            <span id="reply-result-${f.id}" style="font-size:12px;color:#1AAB8A"></span>
+            <span id="reply-result-${f.id}" style="font-size:12px;color:#2878DC"></span>
           </div>
         </div>` : ''}
       </div>`).join('');
@@ -2497,7 +2577,7 @@ async function loadAmbassador() {
       el.innerHTML = rows.map(r => `
       <div class="feedback-item" id="amb-${r.id}">
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
-          <div style="width:36px;height:36px;border-radius:50%;background:#1AAB8A;color:white;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <div style="width:36px;height:36px;border-radius:50%;background:#2878DC;color:white;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">
             ${e(r.name?.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase())}
           </div>
           <div>
@@ -2563,6 +2643,36 @@ async function rejectAmbassador(id) {
     document.getElementById(`amb-${id}`).querySelectorAll('button').forEach(b => b.disabled = true);
   } catch(err) { alert(err.message); }
 }
+
+
+function organiseAdmin() {
+ const more=document.getElementById('panel-more');const moreContent=more.querySelector('.content');more.replaceChildren(...moreContent.childNodes);document.querySelector('#dashboard > .content').append(more);
+ const icons={home:'M3 10 12 3l9 7v11h-6v-7H9v7H3z',users:'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2 M16 3a4 4 0 0 1 0 8 M22 21v-2a4 4 0 0 0-3-3.87 M13 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0',swap:'M4 7h16m-4-4 4 4-4 4 M20 17H4m4-4-4 4 4 4',growth:'M3 17 9 11l4 4 8-10 M15 5h6v6',tools:'M4 5h16 M4 12h16 M4 19h16',chat:'M21 11a8 8 0 0 1-8 8H5l-3 3V11a9 9 0 0 1 19 0',shield:'M12 3 3 7v5c0 5 9 9 9 9s9-4 9-9V7z'};
+ const icon=name=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${icons[name]||icons.tools}"/></svg>`;
+ const link=(tab,title,desc,type='tools')=>`<button class="admin-link" onclick="showTab('${tab}')"><span class="tile-icon">${icon(type)}</span><span><strong>${title}</strong><small>${desc}</small></span></button>`;
+ const section=(id,title)=>{const el=document.createElement('div');el.id='panel-'+id;el.className='panel';el.innerHTML=`<h1 class="panel-title">${title}</h1>`;document.querySelector('#dashboard > .content').append(el);return el;};
+ const communications=section('communications','Announcements & notifications');
+ const maintenance=section('maintenance','System & maintenance');
+ const archive=section('archive','Legacy campaigns');
+ archive.insertAdjacentHTML('beforeend','<div class="archive-note">Previous launch campaigns, retained for reference. These are no longer part of your day-to-day dashboard.</div>');
+ const growth=section('growth','Grow your community');
+ growth.innerHTML='<div class="admin-hero"><small>GROWTH CENTRE</small><h1>More collectors.<br>More great swaps.</h1><p>Follow your sharing feature, collection activity and audience growth.</p></div><div class="admin-shortcuts">'+link('sharing','Collection sharing','Invitations, sign-ups & Community Builders','growth')+link('analytics','Audience insights','Activity, sign-ups & collector locations','users')+link('trading-cards','Trading card activity','Listings, matches & collection adoption','swap')+'</div>';
+ const move=(id,target)=>{const el=document.getElementById(id)?.closest('.card');if(el)target.append(el);};
+ ['announcementTitle','broadcastTitle'].forEach(id=>move(id,communications));
+ ['errorLogList','healthChecks','nudgeResult','expireProposalsResult','postingReminderResult','receiptReminderResult'].forEach(id=>move(id,maintenance));
+ ['pl2026List','ile-sent'].forEach(id=>move(id,archive));move('asc-total',growth);
+ const home=document.getElementById('panel-overview');
+ home.prepend(document.getElementById('overviewStats'));
+ home.insertAdjacentHTML('afterbegin','<div class="admin-hero"><small>YOUR COMMUNITY AT A GLANCE</small><h1>Welcome back, Tom.</h1><p>A clear view of your collectors, swaps and what needs your attention.</p></div>');
+ home.insertAdjacentHTML('beforeend','<h2 class="section-title">Your daily shortcuts</h2><div class="admin-shortcuts">'+link('moderation','Review reports','Disputes, reported users & action history','shield')+link('feedback','Feedback & support','Read suggestions and track fixes','chat')+link('communications','Keep collectors updated','Publish news or schedule notifications','chat')+link('sharing','See how sharing is growing','Track invited collectors and qualification','growth')+'</div>');
+ document.getElementById('adminTools').innerHTML='<div class="admin-shortcuts">'+link('messages','Messages','Conversations & reported messages','chat')+link('moderation','Moderation','Reports, disputes & decisions','shield')+link('feedback','Feedback & support','Manage issues and suggestions','chat')+link('communications','Announcements','News, broadcasts & scheduled messages','chat')+link('maintenance','System & maintenance','Health checks, errors & reminder jobs')+link('invites','Registration codes','Manage access codes','users')+link('android-testers','Android testing','Volunteers & testing invitations','users')+'</div><details><summary style="padding:16px;cursor:pointer">Legacy tools & campaigns</summary><div class="admin-shortcuts">'+link('archive','Previous launch campaigns','Past collection and iOS launches')+link('ambassador','Legacy ambassador badges','Existing awards & requests')+link('donations','Founder click history','Historical interest; not payments')+link('app-launch','App launch waiting list','Previous launch sign-ups')+'</div></details>';
+ document.querySelectorAll('.nav-icon').forEach((el,i)=>el.innerHTML=icon(['home','users','swap','growth','tools'][i]));
+ document.querySelectorAll('h2,.section-title').forEach(el=>{for(const node of el.childNodes)if(node.nodeType===3)node.textContent=node.textContent.replace(/^[^A-Za-z0-9]+(?=[A-Za-z])/u,'');});
+ // Keep mobile table labels aligned with dynamically rendered admin rows.
+ const adapt=()=>document.querySelectorAll('table').forEach(table=>{const headers=[...table.querySelectorAll('thead th')].map(h=>h.textContent.replace(/[⇅▲▼]/g,'').trim());if(!headers.length)return;table.classList.add('mobile-cards');table.querySelectorAll('tbody tr').forEach(row=>[...row.cells].forEach((cell,i)=>{const label=headers[i]||'Actions';if(cell.dataset.label!==label)cell.dataset.label=label;}));});
+ new MutationObserver(adapt).observe(document.body,{childList:true,subtree:true});adapt();
+}
+organiseAdmin();
 
 // Auto-login from URL parameter — runs after all functions defined
 if (adminSecret) {
