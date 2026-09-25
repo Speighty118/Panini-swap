@@ -1339,8 +1339,43 @@ async function loadSharingStats() {
    `<div class="card" style="padding:18px"><strong>${t.signups?Math.round(t.qualified/t.signups*100)+'%':'—'} of attributed sign-ups qualified</strong><p style="margin:6px 0 0;color:#64748b">Verified collectors who added spares and missing items for the invited collection.</p></div>`+
    table('By collection',['Collection','Links','Sign-ups','Qualified'],data.albums.map(a=>[a.name,a.links_created,a.signups,a.qualified]))+
    table('Top sharers',['Collector','Sign-ups','Qualified'],data.leaders.map(u=>[u.name,u.signups,u.qualified]))+
+   '<div class="card" style="padding:18px"><h2>Referred users</h2><p>Select a collector to see who signed up through their links.</p><div id="referralButtons" style="display:flex;gap:10px;flex-wrap:wrap"></div><div id="referralDetails" aria-live="polite"></div></div>'+
    table('Activity timeline',['Date','Links created','Sign-ups'],data.daily.map(d=>[d.day,d.links,d.signups]));
+  const filters = {days:document.getElementById('sharingDays').value,albumId:album.value};
+  const buttons = document.getElementById('referralButtons');
+  for (const user of data.leaders) {
+   const button = document.createElement('button');
+   button.className = 'btn';
+   button.textContent = 'View referred users · '+user.name;
+   button.onclick = () => loadSharingReferrals(user,filters,0);
+   buttons.appendChild(button);
+  }
+  if (!data.leaders.length) buttons.textContent='No referred sign-ups in this period.';
  } catch(error) { if(sequence===sharingRequest)host.innerHTML='<div class="empty">Unable to load sharing statistics. Please try Refresh.</div>'; }
+}
+
+let referralRequest = 0;
+async function loadSharingReferrals(user,filters,offset) {
+ const request=++referralRequest;
+ const host=document.getElementById('referralDetails');
+ host.textContent='Loading referred users…';
+ try {
+  const data=await adminFetch('/admin/collection-sharing-referrals?'+new URLSearchParams({...filters,ownerId:user.id,offset}));
+  if(request!==referralRequest || !host.isConnected) return;
+  const date=value=>new Date(value).toLocaleString('en-GB',{timeZone:'Europe/London'});
+  host.innerHTML=`<h3>${e(user.name)} — referred users</h3><p>Referral dates use UK time. Qualification may be recorded later when the sharer opens their sharing panel.</p>`;
+  for(const person of data.users) {
+   const card=document.createElement('div');card.className='card';card.style.padding='16px';
+   card.innerHTML=`<strong>${e(person.name)}</strong><p>${e(person.collection)}</p><p>Referral recorded: ${e(date(person.created_at))}</p><p>${person.qualified_at?'Qualified: '+e(date(person.qualified_at)):'Not yet recorded as qualified'}</p>`;
+   host.appendChild(card);
+  }
+  if(!data.users.length) host.appendChild(document.createTextNode('No referred users for these filters.'));
+  for(const [label,next,visible] of [['Previous',offset-50,offset>0],['Next',offset+50,data.hasMore]]) {
+   if(!visible)continue;
+   const button=document.createElement('button');button.className='btn';button.textContent=label;
+   button.onclick=()=>loadSharingReferrals(user,filters,next);host.appendChild(button);
+  }
+ } catch(error) {if(request===referralRequest && host.isConnected)host.textContent='Unable to load referred users. Select the collector to try again.';}
 }
 
 let tradingCardsChartInstance = null;

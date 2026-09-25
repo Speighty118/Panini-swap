@@ -24,6 +24,15 @@ function requireAdmin(req, res, next) {
 
 router.use(requireAdmin);
 
+router.get('/collection-sharing-referrals', async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  try {
+    res.json(await require('./collection_sharing_referrals')(pool, req.query));
+  } catch (error) {
+    res.status(error.status || 500).json({error: error.status === 400 ? error.message : 'Unable to load referred users.'});
+  }
+});
+
 router.get('/collection-sharing-stats', async (req, res) => {
   try {
     res.set('Cache-Control', 'no-store').json(await require('./collection_sharing_stats')(pool, req.query));
