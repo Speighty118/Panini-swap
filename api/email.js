@@ -210,7 +210,6 @@ async function sendFounderWelcomeEmail(toEmail, name) {
         <ul style="margin: 0; padding-left: 20px; color: #78350F; font-size: 13px; line-height: 1.8;">
           <li>Founder badge displayed next to your name everywhere</li>
           <li>Gold profile styling</li>
-          <li>Early access to vote on new features</li>
           <li>Lifetime recognition as a founding supporter</li>
         </ul>
       </div>

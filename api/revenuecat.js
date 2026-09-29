@@ -1,78 +1,29 @@
-/**
- * RevenueCat webhook — grants Founder membership when the iOS or Android
- * in-app purchase completes.
- *
- * IMPORTANT — env var needed in Railway:
- *   REVENUECAT_WEBHOOK_SECRET  - shared secret configured as the
- *                                "Authorization header value" when
- *                                setting up this webhook URL in the
- *                                RevenueCat dashboard (Project settings
- *                                → Integrations → Webhooks)
- *
- * The RevenueCat app_user_id is set client-side to our own numeric
- * users.id (see frontend/src/revenuecat.js), so no separate identity
- * mapping is needed here.
- */
-
 const express = require('express');
-const router = express.Router();
 const { Pool } = require('pg');
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const { sendFounderWelcomeEmail } = require('./email');
 const { createNotification } = require('./notifications');
-
-const FOUNDER_PRODUCT_IDS = ['com.gotonespare.app.founder', 'founder_membership'];
-const FOUNDER_PURCHASE_EVENT_TYPES = ['INITIAL_PURCHASE', 'NON_RENEWING_PURCHASE'];
-
-router.post('/webhook', async (req, res) => {
-  const auth = req.headers['authorization'];
-  if (!process.env.REVENUECAT_WEBHOOK_SECRET || auth !== `Bearer ${process.env.REVENUECAT_WEBHOOK_SECRET}`) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
-
-  const event = req.body?.event;
-  if (!event || !FOUNDER_PURCHASE_EVENT_TYPES.includes(event.type) || !FOUNDER_PRODUCT_IDS.includes(event.product_id)) {
-    return res.json({ received: true });
-  }
-
-  const userId = parseInt(event.app_user_id, 10);
-  if (!userId) {
-    console.error('RevenueCat webhook: non-numeric app_user_id', event.app_user_id);
-    return res.json({ received: true });
-  }
-
-  try {
-    const { rows } = await pool.query(
-      `UPDATE users
-       SET founder_member = TRUE,
-           founder_since = NOW(),
-           membership_tier = 'founder',
-           founder_payment_id = $1,
-           founder_amount = $2
-       WHERE id = $3 AND founder_member = FALSE
-       RETURNING id, name, email`,
-      [event.transaction_id || event.id, Math.round((event.price_in_purchased_currency || 0) * 100), userId]
-    );
-
-    // No row back means either already a Founder (RevenueCat can resend
-    // events — this keeps it idempotent) or an invalid user id.
-    if (rows[0]) {
-      await createNotification(pool, {
-        userId,
-        type: 'founder_welcome',
-        title: '🏆 Welcome to the Founders Club!',
-        body: 'Thank you for supporting Got One Spare — your Founder badge is now live on your profile.',
-      }).catch(() => {});
-
-      sendFounderWelcomeEmail(rows[0].email, rows[0].name).catch((err) => {
-        console.error('Founder welcome email failed:', err.message);
-      });
-    }
-  } catch (err) {
-    console.error('RevenueCat webhook DB update failed:', err.message);
-  }
-
-  res.json({ received: true });
+const createRevenueCatHandler = require('./revenuecat_handler');
+const router = express.Router();
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const { requireAuth } = require('./middleware/auth');
+const { createSync } = require('./revenuecat_sync');
+const sync = createSync({pool,apiKey:process.env.REVENUECAT_LOOKUP_KEY || 'appl_TgridhdUrSWzKOGYKbHwdgowyRT'});
+const enabled = process.env.FOUNDER_LEDGER_ENABLED === 'true';
+router.post('/sync', requireAuth, async (req,res) => {
+  res.set('Cache-Control','no-store');
+  if(!enabled)return res.status(503).json({error:'Purchase reconciliation unavailable.'});
+  try { await sync([req.user.id]); return res.json({received:true}); }
+  catch { return res.status(502).json({error:'Unable to verify purchase. Please try Restore purchases again shortly.'}); }
 });
-
+router.post('/webhook', createRevenueCatHandler({
+  pool, secret: process.env.REVENUECAT_WEBHOOK_SECRET,
+  ledger: enabled ? async (_pool,event) => {
+    if(event.environment==='SANDBOX')return [];
+    if(event.type==='TRANSFER')return sync([...(event.transferred_from||[]),...(event.transferred_to||[])]);
+    const supported=['INITIAL_PURCHASE','NON_RENEWING_PURCHASE','CANCELLATION','REFUND_REVERSED'];
+    if(event.environment!=='PRODUCTION'||!supported.includes(event.type)||!['com.gotonespare.app.founder','com.gotonespare.app.founder.v2','founder_membership'].includes(event.product_id))return [];
+    return sync([event.app_user_id]);
+  } : null,
+  notify: createNotification, welcome: sendFounderWelcomeEmail,
+}));
 module.exports = router;

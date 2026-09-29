@@ -52,8 +52,7 @@ app.use(helmet());
 // bytes, so verification fails if the body has already been parsed.
 app.use(
   '/api/founder/webhook',
-  express.raw({ type: 'application/json' }),
-  require('./api/founder')
+  express.raw({ type: 'application/json' })
 );
 
 app.use(express.json({ limit: '2mb' }));
@@ -159,6 +158,15 @@ app.use('/api/push', pushRoutes);
 app.use('/api/messages', messagingRoutes);
 app.use('/api/ambassador', ambassadorRoutes);
 app.use('/api/founder', founderRoutes);
+// Separate, default-off support checkout. Never grants Founder entitlements.
+if (process.env.SUPPORT_CHECKOUT_ENABLED === 'true') {
+  app.use('/api/support', rateLimit({windowMs:60000,max:15}), require('./api/support_checkout')({
+    stripe: require('stripe')(process.env.STRIPE_SECRET_KEY),
+    requireAuth: require('./api/middleware/auth').requireAuth,
+    enabled: true, frontendUrl: process.env.FRONTEND_URL,
+  }));
+}
+
 app.use('/api/revenuecat', revenuecatRoutes);
 app.use('/api/pl2026', pl2026Routes);
 app.use('/api/app-launch', appLaunchRoutes);

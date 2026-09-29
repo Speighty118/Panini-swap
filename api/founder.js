@@ -22,7 +22,6 @@ const { Pool } = require('pg');
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const Stripe = require('stripe');
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
-console.log('[DEBUG] STRIPE_SECRET_KEY present:', Boolean(process.env.STRIPE_SECRET_KEY), '| length:', (process.env.STRIPE_SECRET_KEY || '').length, '| starts with:', (process.env.STRIPE_SECRET_KEY || '').slice(0, 8));
 const { requireAuth } = require('./middleware/auth');
 const { sendFounderWelcomeEmail } = require('./email');
 const { createNotification } = require('./notifications');
@@ -99,7 +98,7 @@ router.post('/checkout', requireAuth, async (req, res) => {
       ],
       // metadata carries the user id through to the webhook, since
       // Stripe Checkout itself has no concept of your own user accounts
-      metadata: { userId: String(req.user.id) },
+      metadata: { userId: String(req.user.id), purchaseType: 'founder' },
       success_url: `${frontendUrl}/?founder=success`,
       cancel_url: `${frontendUrl}/?founder=cancelled`,
     });
@@ -130,6 +129,7 @@ router.post('/webhook', async (req, res) => {
 
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object;
+    if (!require('./founder_payment')(session)) return res.json({ received: true });
     const userId = parseInt(session.metadata?.userId, 10);
 
     if (!userId) {
@@ -167,8 +167,8 @@ router.post('/webhook', async (req, res) => {
       }
     } catch (err) {
       console.error('Founder webhook DB update failed:', err.message);
-      // Still acknowledge receipt so Stripe doesn't endlessly retry a
-      // payment that DID succeed — log it and fix manually if needed.
+      // Retry delivery after a database failure; the update is idempotent.
+      return res.status(500).json({ error: 'Unable to record Founder payment.' });
     }
   }
 
