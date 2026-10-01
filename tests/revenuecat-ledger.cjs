@@ -41,3 +41,10 @@ test('authoritative reconciliation handles restore, transfer, refund and repeat 
  assert.equal((await sync([1])).length,1);assert.equal((await sync([1])).length,0);
  owner=2;await sync([1,2]);assert.deepEqual(await members(),[2]);active=false;await sync([2]);assert.deepEqual(await members(),[]);
 });
+test('sandbox access is confined to the server-configured review account',async()=>{
+ await reset();await pool.query("UPDATE users SET email='review@example.invalid' WHERE id=1");
+ const {createSync}=require('../api/revenuecat_sync');
+ const fetchImpl=async()=>({ok:true,json:async()=>({subscriber:{entitlements:{founder:{expires_date:null,product_identifier:'com.gotonespare.app.founder.v2',purchase_date:'2026-10-01'}},non_subscriptions:{'com.gotonespare.app.founder.v2':[{id:'sandbox-test',is_sandbox:true,store:'app_store',purchase_date:'2026-10-01'}]}}})});
+ await createSync({pool,apiKey:'test',fetchImpl})([1,2]);assert.deepEqual(await members(),[]);
+ await createSync({pool,apiKey:'test',fetchImpl,sandboxReviewEmail:'review@example.invalid'})([1,2]);assert.deepEqual(await members(),[1]);
+});

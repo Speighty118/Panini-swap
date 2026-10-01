@@ -7,7 +7,7 @@ const router = express.Router();
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const { requireAuth } = require('./middleware/auth');
 const { createSync } = require('./revenuecat_sync');
-const sync = createSync({pool,apiKey:process.env.REVENUECAT_LOOKUP_KEY || 'appl_TgridhdUrSWzKOGYKbHwdgowyRT'});
+const sync = createSync({pool,sandboxReviewEmail:process.env.APPLE_SANDBOX_REVIEW_EMAIL,apiKey:process.env.REVENUECAT_LOOKUP_KEY || 'appl_TgridhdUrSWzKOGYKbHwdgowyRT'});
 const enabled = process.env.FOUNDER_LEDGER_ENABLED === 'true';
 router.post('/sync', requireAuth, async (req,res) => {
   res.set('Cache-Control','no-store');

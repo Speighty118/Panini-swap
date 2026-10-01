@@ -1,7 +1,7 @@
 // Server-authoritative lifetime entitlement reconciliation. No client receipts accepted.
 const PRODUCTS = new Set(['com.gotonespare.app.founder','com.gotonespare.app.founder.v2','founder_membership']);
 const numeric = value => /^[1-9]\d*$/.test(String(value)) && Number.isSafeInteger(Number(value));
-function verifiedPurchase(data) {
+function verifiedPurchase(data, allowSandbox = false) {
  const subscriber=data?.subscriber;
  if(!subscriber || !subscriber.entitlements || !subscriber.non_subscriptions) throw Error('Incomplete purchase response');
  const entitlement=subscriber.entitlements.founder;
@@ -11,16 +11,16 @@ function verifiedPurchase(data) {
   if(!Number.isFinite(Date.parse(entitlement.expires_date)))throw Error('Invalid entitlement expiry');
   if(Date.parse(entitlement.expires_date)<=Date.now())return null;
  }
- const matches=(subscriber.non_subscriptions[entitlement.product_identifier]||[]).filter(p=>p.is_sandbox===false&&['app_store','play_store'].includes(p.store)&&p.purchase_date===entitlement.purchase_date&&p.id&&!p.refunded_at);
+ const matches=(subscriber.non_subscriptions[entitlement.product_identifier]||[]).filter(p=>(p.is_sandbox===false||(allowSandbox&&p.is_sandbox===true))&&['app_store','play_store'].includes(p.store)&&p.purchase_date===entitlement.purchase_date&&p.id&&!p.refunded_at);
  if(!matches.length){
   // A sandbox entitlement must not affect a real account.
   if((subscriber.non_subscriptions[entitlement.product_identifier]||[]).some(p=>p.is_sandbox===true&&p.purchase_date===entitlement.purchase_date))return undefined;
   throw Error('Entitlement has no verified production purchase');
  }
  if(matches.length!==1)throw Error('Ambiguous production purchase');
- return {transaction:`rc:${matches[0].id}`,product:entitlement.product_identifier};
+ return {transaction:`${matches[0].is_sandbox ? "rc-sandbox" : "rc"}:${matches[0].id}`,product:entitlement.product_identifier};
 }
-function createSync({pool,apiKey,fetchImpl=fetch}) {
+function createSync({pool,apiKey,fetchImpl=fetch,sandboxReviewEmail=""}) {
  return async function sync(ids){
   if(!apiKey)throw Error('RevenueCat server lookup is not configured');
   ids=[...new Set(ids.filter(numeric).map(Number))];
@@ -30,12 +30,12 @@ function createSync({pool,apiKey,fetchImpl=fetch}) {
    await db.query('BEGIN');
    // Lookup inside the lock prevents concurrent snapshots overwriting newer reconciliation.
    await db.query('SELECT pg_advisory_xact_lock(73190421)');
-   const existing=(await db.query('SELECT id FROM users WHERE id=ANY($1::integer[])',[ids])).rows.map(r=>r.id);
+   const existing=(await db.query('SELECT id,email FROM users WHERE id=ANY($1::integer[])',[ids])).rows;
    const states=[];
-   for(const id of existing){
+   for(const {id,email} of existing){
     const response=await fetchImpl(`https://api.revenuecat.com/v1/subscribers/${id}`,{headers:{Authorization:`Bearer ${apiKey}`},signal:AbortSignal.timeout(10000)});
     if(!response.ok)throw Error('RevenueCat lookup failed');
-    const purchase=verifiedPurchase(await response.json());
+    const purchase=verifiedPurchase(await response.json(), Boolean(sandboxReviewEmail) && email === sandboxReviewEmail);
     if(purchase!==undefined)states.push({id,purchase});
    }
    const claimed=states.filter(s=>s.purchase).map(s=>s.purchase.transaction);
