@@ -575,16 +575,10 @@
 
   <!-- FOUNDER CLICKS -->
   <div id="panel-donations" class="panel">
-    <div class="card">
-      <div class="card-header">
-        <h2>🏆 Founder button clicks</h2>
-        <span id="donationCount" style="font-size:13px;color:#6B7280"></span>
-      </div>
-      <p style="padding:10px 18px 0;font-size:13px;color:#6B7280;margin:0">
-        These are people who clicked "Become a Founder". They were redirected to Stripe checkout — check your Stripe dashboard to see who actually completed payment.
-      </p>
-      <div id="donationsList"></div>
-    </div>
+    <div class="card"><div class="card-header"><h2>💛 Donations & support</h2><span id="donationCount"></span></div>
+    <div style="padding:18px"><label>Period <select id="donationPeriod" onchange="loadDonations()"><option value="24">Last 24 hours</option><option value="appeal">Tonight’s appeal — 30 October, from 8 pm UK</option><option value="168">Last 7 days</option><option value="720">Last 30 days</option></select></label> <button class="btn-primary" onclick="loadDonations()">Refresh</button>
+    <p style="font-size:13px;color:#6B7280">Live website payments from Stripe. Amounts are gross GBP before fees and refunds; Apple purchases are not included. Payment results are grouped by when checkout started. Link visits are not confirmed notification opens, and repeat visits are counted.</p>
+    <div id="donationsList" aria-live="polite"></div></div></div>
   </div>
 
   <!-- APP LAUNCH INTEREST -->
@@ -1132,40 +1126,33 @@ async function adminSendMessage() {
   }
 }
 
+let donationReportRequest=0;
 async function loadDonations() {
+  const sequence=++donationReportRequest;
+  const el=document.getElementById('donationsList');
+  const count=document.getElementById('donationCount');
+  el.textContent='Loading verified Stripe payments…'; count.textContent='';
+  const period=document.getElementById('donationPeriod').value;
+  const to=new Date(), from=period==='appeal'?new Date('2026-10-30T20:00:00Z'):new Date(to.getTime()-Number(period)*3600000);
+  if(from>=to){el.textContent='The appeal period starts at 8 pm UK time on 30 October. Choose another period to see existing activity.';return;}
+  const money=p=>new Intl.NumberFormat('en-GB',{style:'currency',currency:'GBP'}).format(Number(p)/100);
+  const when=t=>new Date(t).toLocaleString('en-GB',{timeZone:'Europe/London'});
   try {
-    const items = await adminFetch('/donations');
-    document.getElementById('donationCount').textContent = `${items.length} clicks`;
-    const el = document.getElementById('donationsList');
-    if (!items.length) { el.innerHTML = '<div class="empty">No donation clicks yet.</div>'; return; }
-
-    const LOCATION_LABELS = {
-      become_a_founder: '🏆 Become a Founder button',
-      swap_confirmed: '🎉 Swap confirmed (old)',
-      dashboard: '📊 Dashboard (old)',
-      footer: '🔗 Footer link (old)',
-    };
-
-    el.innerHTML = `<div class="table-wrap"><table>
-      <thead><tr>
-        <th>User</th>
-        <th>Button location</th>
-        <th>When</th>
-      </tr></thead>
-      <tbody>${items.map(d => `<tr>
-        <td>
-          ${d.user_name
-            ? `<strong>${e(d.user_name)}</strong><div style="font-size:11px;color:#6B7280">${e(d.user_email || '')}</div>`
-            : '<span style="color:#9CA3AF">Anonymous</span>'
-          }
-        </td>
-        <td><span class="badge badge-blue">${e(LOCATION_LABELS[d.location] || d.location)}</span></td>
-        <td style="font-size:12px;color:#6B7280">${new Date(d.clicked_at).toLocaleString()}</td>
-      </tr>`).join('')}
-      </tbody></table></div>`;
-  } catch(err) {
-    document.getElementById('donationsList').innerHTML = `<div class="empty">Error: ${err.message}</div>`;
-  }
+    const d=await adminFetch('/donations/report?'+new URLSearchParams({from:from.toISOString(),to:to.toISOString()}));
+    if(sequence!==donationReportRequest)return;
+    count.textContent='Updated '+when(to);
+    const metric=(label,value)=>`<div style="padding:14px;border:1px solid #E5E7EB;border-radius:10px"><strong style="font-size:22px">${e(String(value))}</strong><div>${e(label)}</div></div>`;
+    const labels={support_link_visit:'Support link visits',support_page_view:'Support page views (signed in)',become_a_founder:'Founder button clicks'};
+    el.innerHTML=(d.complete?'':'<p style="color:#B45309">Partial report: more than 2,000 checkout sessions match this period. Choose a shorter period; payment totals below are incomplete.</p>')+
+      '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:12px">'+
+      metric('Gross received',money(d.grossPence))+metric('Contributions',money(d.contributionPence))+metric('Founder purchases',money(d.founderPence))+metric('Payments',d.paidCount)+metric('Donors',d.donorCount)+metric('Checkouts started',d.checkoutCount)+metric('Still open',d.openCount)+metric('Expired without payment',d.expiredCount)+metric('Checkout completion',d.checkoutCount?Math.round(100*d.paidCount/d.checkoutCount)+'%':'—')+'</div>'+
+      '<h3 style="margin-top:24px">Confirmed website payments</h3><p>Time shown is checkout start time. A completed payment is verified by Stripe, not by a button click.</p><div class="table-wrap"><table><thead><tr><th>Collector</th><th>Type</th><th>Amount</th><th>Checkout started (UK)</th></tr></thead><tbody>'+
+      (d.payments.map(p=>`<tr><td><strong>${e(p.name||'Unknown collector')}</strong><div>${e(p.email||'')}</div></td><td>${e(p.type)}</td><td>${money(p.amount)}</td><td>${when(p.createdAt)}</td></tr>`).join('')||'<tr><td colspan="4">No confirmed payments for these checkouts.</td></tr>')+'</tbody></table></div>'+
+      '<h3 style="margin-top:24px">Interest & link visits</h3><p>Tracking starts when this release goes live. Anonymous visitors cannot be identified; signed-in activity shows the collector. Counts across rows must not be added to calculate unique people.</p><div class="table-wrap"><table><thead><tr><th>Activity</th><th>Events</th><th>Identified collectors</th></tr></thead><tbody>'+
+      (d.activity.map(a=>`<tr><td>${e(labels[a.location]||a.location)}</td><td>${a.events}</td><td>${a.identified_users}</td></tr>`).join('')||'<tr><td colspan="3">No recorded activity in this period.</td></tr>')+'</tbody></table></div>'+
+      '<h3 style="margin-top:24px">Recent activity (latest 200)</h3><div class="table-wrap"><table><thead><tr><th>Collector</th><th>Activity</th><th>Time (UK)</th></tr></thead><tbody>'+
+      d.recentActivity.map(a=>`<tr><td>${e(a.user_name||'Anonymous')}<div>${e(a.user_email||'')}</div></td><td>${e(labels[a.location]||a.location)}</td><td>${when(a.clicked_at)}</td></tr>`).join('')+'</tbody></table></div>';
+  } catch(err) {if(sequence===donationReportRequest)el.textContent='Could not load verified donation data: '+err.message;}
 }
 
 async function loadAppLaunch() {
@@ -2700,7 +2687,7 @@ function organiseAdmin() {
  home.prepend(document.getElementById('overviewStats'));
  home.insertAdjacentHTML('afterbegin','<div class="admin-hero"><small>YOUR COMMUNITY AT A GLANCE</small><h1>Welcome back, Tom.</h1><p>A clear view of your collectors, swaps and what needs your attention.</p></div>');
  home.insertAdjacentHTML('beforeend','<h2 class="section-title">Your daily shortcuts</h2><div class="admin-shortcuts">'+link('moderation','Review reports','Disputes, reported users & action history','shield')+link('feedback','Feedback & support','Read suggestions and track fixes','chat')+link('communications','Keep collectors updated','Publish news or schedule notifications','chat')+link('sharing','See how sharing is growing','Track invited collectors and qualification','growth')+'</div>');
- document.getElementById('adminTools').innerHTML='<div class="admin-shortcuts">'+link('messages','Messages','Conversations & reported messages','chat')+link('moderation','Moderation','Reports, disputes & decisions','shield')+link('feedback','Feedback & support','Manage issues and suggestions','chat')+link('communications','Announcements','News, broadcasts & scheduled messages','chat')+link('maintenance','System & maintenance','Health checks, errors & reminder jobs')+link('invites','Registration codes','Manage access codes','users')+link('android-testers','Android testing','Volunteers & testing invitations','users')+'</div><details><summary style="padding:16px;cursor:pointer">Legacy tools & campaigns</summary><div class="admin-shortcuts">'+link('archive','Previous launch campaigns','Past collection and iOS launches')+link('ambassador','Legacy ambassador badges','Existing awards & requests')+link('donations','Founder click history','Historical interest; not payments')+link('app-launch','App launch waiting list','Previous launch sign-ups')+'</div></details>';
+ document.getElementById('adminTools').innerHTML='<div class="admin-shortcuts">'+link('donations','Donations & support','Payments, supporters & appeal activity','growth')+link('messages','Messages','Conversations & reported messages','chat')+link('moderation','Moderation','Reports, disputes & decisions','shield')+link('feedback','Feedback & support','Manage issues and suggestions','chat')+link('communications','Announcements','News, broadcasts & scheduled messages','chat')+link('maintenance','System & maintenance','Health checks, errors & reminder jobs')+link('invites','Registration codes','Manage access codes','users')+link('android-testers','Android testing','Volunteers & testing invitations','users')+'</div><details><summary style="padding:16px;cursor:pointer">Legacy tools & campaigns</summary><div class="admin-shortcuts">'+link('archive','Previous launch campaigns','Past collection and iOS launches')+link('ambassador','Legacy ambassador badges','Existing awards & requests')+link('app-launch','App launch waiting list','Previous launch sign-ups')+'</div></details>';
  document.querySelectorAll('.nav-icon').forEach((el,i)=>el.innerHTML=icon(['home','users','swap','growth','tools'][i]));
  document.querySelectorAll('h2,.section-title').forEach(el=>{for(const node of el.childNodes)if(node.nodeType===3)node.textContent=node.textContent.replace(/^[^A-Za-z0-9]+(?=[A-Za-z])/u,'');});
  // Keep mobile table labels aligned with dynamically rendered admin rows.
