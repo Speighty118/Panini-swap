@@ -58,6 +58,17 @@ router.post('/click', async (req, res) => {
   }
 });
 
+// Admin-attested recovery of an original event copied from RevenueCat history.
+// Records reporting data only: never charges, grants membership or sends messages.
+router.post('/apple-recover', requireAdmin, async (req,res)=>{
+ const {normalize,record}=require('./apple_support');
+ if(req.body?.verifiedInRevenueCat!==true)return res.status(400).json({error:'Verify this original event in RevenueCat first.'});
+ const event=req.body.event;
+ try {if(!normalize(event))throw Error();}catch{return res.status(400).json({error:'A valid production Apple support payment event is required.'});}
+ try {await record(pool,event,'admin_recovery');res.json({recorded:true});}
+ catch{return res.status(503).json({error:'Recovery could not be saved. Retry with the same event ID.'});}
+});
+
 // Stripe is queried live so a checkout redirect is never counted as a payment.
 router.get('/report', requireAdmin, async (req, res) => {
   res.set('Cache-Control', 'no-store');

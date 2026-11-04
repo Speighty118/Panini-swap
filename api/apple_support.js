@@ -5,8 +5,8 @@ function normalize(e){
  const amount=typeof e.price_in_purchased_currency==='number'&&Number.isFinite(e.price_in_purchased_currency)?Math.round(Math.abs(e.price_in_purchased_currency)*100):null;
  return {eventId:String(e.id),transactionId:String(e.transaction_id),type:e.type,eventMs:e.event_timestamp_ms,purchasedAt:new Date(e.purchased_at_ms).toISOString(),userId:/^[1-9]\d*$/.test(String(e.app_user_id))&&Number.isSafeInteger(Number(e.app_user_id))?Number(e.app_user_id):null,product:e.product_id,currency:typeof e.currency==='string'?e.currency.toUpperCase():null,amount:Number.isSafeInteger(amount)?amount:null};
 }
-async function record(pool,event){const e=normalize(event);if(!e)return;
- await pool.query(`INSERT INTO apple_support_events(event_id,transaction_id,event_type,event_ms,purchased_at,user_id,product_id,currency,amount_minor) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT(event_id) DO NOTHING`,[e.eventId,e.transactionId,e.type,e.eventMs,e.purchasedAt,e.userId,e.product,e.currency,e.amount]);
+async function record(pool,event,source='webhook'){const e=normalize(event);if(!e)return;
+ await pool.query(`INSERT INTO apple_support_events(event_id,transaction_id,event_type,event_ms,purchased_at,user_id,product_id,currency,amount_minor,record_source) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT(event_id) DO NOTHING`,[e.eventId,e.transactionId,e.type,e.eventMs,e.purchasedAt,e.userId,e.product,e.currency,e.amount,source==='admin_recovery'?source:'webhook']);
 }
 function summarize(rows){
  const groups=new Map();for(const e of rows){if(!groups.has(e.transaction_id))groups.set(e.transaction_id,[]);groups.get(e.transaction_id).push(e);}
@@ -16,7 +16,7 @@ function summarize(rows){
   const purchase=events.find(e=>['NON_RENEWING_PURCHASE','INITIAL_PURCHASE'].includes(e.event_type));
   if(!purchase || purchase.currency!=='GBP'||purchase.amount_minor===null||!Number.isSafeInteger(Number(purchase.amount_minor))){excluded++;continue;}
   const latest=events[events.length-1];
-  payments.push({id:'apple:'+purchase.transaction_id,userId:purchase.user_id===null?null:String(purchase.user_id),name:purchase.name||'',email:purchase.email||'',amount:Number(purchase.amount_minor),type:purchase.product_id.includes('.support.')?'Contribution':'Founder',createdAt:purchase.purchased_at,refunded:latest.event_type==='CANCELLATION'});
+  payments.push({id:'apple:'+purchase.transaction_id,userId:purchase.user_id===null?null:String(purchase.user_id),name:purchase.name||'',email:purchase.email||'',amount:Number(purchase.amount_minor),type:purchase.product_id.includes('.support.')?'Contribution':'Founder',createdAt:purchase.purchased_at,source:purchase.record_source||'webhook',refunded:latest.event_type==='CANCELLATION'});
  }
  const grossPence=payments.reduce((n,p)=>n+p.amount,0),refundPence=payments.filter(p=>p.refunded).reduce((n,p)=>n+p.amount,0);
  return {payments,grossPence,refundPence,retainedPence:grossPence-refundPence,contributionPence:payments.filter(p=>p.type==='Contribution').reduce((n,p)=>n+p.amount,0),founderPence:payments.filter(p=>p.type==='Founder').reduce((n,p)=>n+p.amount,0),paidCount:payments.length,excludedTransactions:excluded};

@@ -585,7 +585,8 @@
     <div class="card"><div class="card-header"><h2>💛 Donations & support</h2><span id="donationCount"></span></div>
     <div style="padding:18px"><label>Period <select id="donationPeriod" onchange="loadDonations()"><option value="24">Last 24 hours</option><option value="appeal">Tonight’s appeal — 30 October, from 8 pm UK</option><option value="168">Last 7 days</option><option value="720">Last 30 days</option></select></label> <button class="btn-primary" onclick="loadDonations()">Refresh</button>
     <p style="font-size:13px;color:#6B7280">Website payments come from Stripe; Apple payments come from verified production RevenueCat events. GBP amounts are gross before fees and tax deductions. Stripe totals are before refunds; Apple refunds are shown separately. Website dates use checkout creation; Apple dates use purchase time. Link visits are not confirmed notification opens, and repeat visits are counted.</p>
-    <div id="donationsList" aria-live="polite"></div></div></div>
+    <div id="donationsList" aria-live="polite"></div>
+    <details style="margin-top:20px"><summary>Recover an earlier Apple payment</summary><p>Paste the original request JSON from RevenueCat’s event history. Only use events you have verified there. This saves an admin-recovered record; it does not charge the customer or change membership. Repeating the same event is safe.</p><textarea id="appleRecoveryJson" aria-label="Original RevenueCat event JSON" rows="5" style="width:100%"></textarea><label><input type="checkbox" id="appleRecoveryVerified"> I verified this original event in RevenueCat</label><p><button class="btn-primary" id="appleRecoveryButton" onclick="recoverApplePayment()">Recover payment record</button></p><p id="appleRecoveryStatus" aria-live="polite"></p></details></div></div>
   </div>
 
   <!-- APP LAUNCH INTEREST -->
@@ -1133,6 +1134,17 @@ async function adminSendMessage() {
   }
 }
 
+async function recoverApplePayment(){
+ const status=document.getElementById('appleRecoveryStatus'),button=document.getElementById('appleRecoveryButton');
+ if(!document.getElementById('appleRecoveryVerified').checked){status.textContent='Verify the event in RevenueCat and tick the confirmation first.';return;}
+ button.disabled=true;
+ try{const parsed=JSON.parse(document.getElementById('appleRecoveryJson').value);
+ await adminFetch('/donations/apple-recover',{method:'POST',body:JSON.stringify({event:parsed.event||parsed,verifiedInRevenueCat:true})});
+ status.textContent='Payment record recovered. Existing event IDs are not counted twice.';
+ document.getElementById('appleRecoveryJson').value='';document.getElementById('appleRecoveryVerified').checked=false;await loadDonations();
+ }catch(err){status.textContent='Recovery failed: '+err.message;}finally{button.disabled=false;}
+}
+
 let donationReportRequest=0;
 async function loadDonations() {
   const sequence=++donationReportRequest;
@@ -1159,7 +1171,7 @@ async function loadDonations() {
       '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:12px">'+metric('Apple gross',money(d.apple.grossPence))+metric('Apple contributions',money(d.apple.contributionPence))+metric('Apple Founder',money(d.apple.founderPence))+metric('Apple refunds',money(d.apple.refundPence))+metric('Apple after refunds',money(d.apple.retainedPence))+metric('Apple payments',d.apple.paidCount)+'</div>'+
       (d.apple.excludedTransactions?'<p>'+e(String(d.apple.excludedTransactions))+' Apple transactions excluded from GBP totals (other currency, unknown price or missing purchase event).</p>':'')+
       '<div class="table-wrap"><table><thead><tr><th>Collector</th><th>Type</th><th>Gross amount</th><th>Purchased (UK)</th><th>Status</th></tr></thead><tbody>'+
-      (d.apple.payments.map(p=>`<tr><td>${e(p.name||'Unlinked Apple customer')}<div>${e(p.email||'')}</div></td><td>${e(p.type)}</td><td>${money(p.amount)}</td><td>${when(p.createdAt)}</td><td>${p.refunded?'Refunded':'Paid'}</td></tr>`).join('')||'<tr><td colspan="5">No recorded GBP Apple purchases in this period. Earlier history may be incomplete.</td></tr>')+'</tbody></table></div>':'<p>Apple payment records unavailable. Combined total is not shown.</p>')+
+      (d.apple.payments.map(p=>`<tr><td>${e(p.name||'Unlinked Apple customer')}<div>${e(p.email||'')}</div></td><td>${e(p.type)}</td><td>${money(p.amount)}</td><td>${when(p.createdAt)}</td><td>${p.refunded?'Refunded':'Paid'}${p.source==='admin_recovery'?'<div>Recovered from RevenueCat by admin</div>':''}</td></tr>`).join('')||'<tr><td colspan="5">No recorded GBP Apple purchases in this period. Earlier history may be incomplete.</td></tr>')+'</tbody></table></div>':'<p>Apple payment records unavailable. Combined total is not shown.</p>')+
       '<h3 style="margin-top:24px">Interest & link visits</h3><p>Tracking starts when this release goes live. Anonymous visitors cannot be identified; signed-in activity shows the collector. Counts across rows must not be added to calculate unique people.</p><div class="table-wrap"><table><thead><tr><th>Activity</th><th>Events</th><th>Identified collectors</th></tr></thead><tbody>'+
       (d.activity.map(a=>`<tr><td>${e(labels[a.location]||a.location)}</td><td>${a.events}</td><td>${a.identified_users}</td></tr>`).join('')||'<tr><td colspan="3">No recorded activity in this period.</td></tr>')+'</tbody></table></div>'+
       '<h3 style="margin-top:24px">Recent activity (latest 200)</h3><div class="table-wrap"><table><thead><tr><th>Collector</th><th>Activity</th><th>Time (UK)</th></tr></thead><tbody>'+
