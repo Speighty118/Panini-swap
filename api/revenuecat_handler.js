@@ -1,9 +1,12 @@
 // Inject dependencies so payment processing can be tested without live services.
 const PRODUCTS = new Set(['com.gotonespare.app.founder', 'com.gotonespare.app.founder.v2', 'founder_membership']);
-module.exports = function createRevenueCatHandler({ pool, secret, notify, welcome, ledger = null }) {
+module.exports = function createRevenueCatHandler({ pool, secret, notify, welcome, ledger = null, recordPayment = null }) {
   return async (req, res) => {
     if (!secret || req.headers.authorization !== `Bearer ${secret}`) return res.status(401).json({ error: 'Unauthorized' });
     const event = req.body?.event;
+    if(recordPayment && event){
+      try{await recordPayment(pool,event);}catch{return res.status(500).json({error:'Payment recording failed. Please retry.'});}
+    }
     if (ledger && event) {
       try {
         const granted = await ledger(pool, event);

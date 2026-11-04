@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node index.js",
     "match-job": "node jobs/run_matching.js",
-    "prestart": "node scripts/migrate-support.cjs"
+    "prestart": "node scripts/migrate-support.cjs && node scripts/migrate-apple-support.cjs"
   },
   "dependencies": {
     "express": "^4.19.2",

@@ -17,6 +17,7 @@ router.post('/sync', requireAuth, async (req,res) => {
 });
 router.post('/webhook', createRevenueCatHandler({
   pool, secret: process.env.REVENUECAT_WEBHOOK_SECRET,
+  recordPayment: require('./apple_support').record,
   ledger: enabled ? async (_pool,event) => {
     if(event.environment==='SANDBOX')return [];
     if(event.type==='TRANSFER')return sync([...(event.transferred_from||[]),...(event.transferred_to||[])]);

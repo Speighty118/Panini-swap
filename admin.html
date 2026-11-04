@@ -584,7 +584,7 @@
   <div id="panel-donations" class="panel">
     <div class="card"><div class="card-header"><h2>💛 Donations & support</h2><span id="donationCount"></span></div>
     <div style="padding:18px"><label>Period <select id="donationPeriod" onchange="loadDonations()"><option value="24">Last 24 hours</option><option value="appeal">Tonight’s appeal — 30 October, from 8 pm UK</option><option value="168">Last 7 days</option><option value="720">Last 30 days</option></select></label> <button class="btn-primary" onclick="loadDonations()">Refresh</button>
-    <p style="font-size:13px;color:#6B7280">Live website payments from Stripe. Amounts are gross GBP before fees and refunds; Apple purchases are not included. Payment results are grouped by when checkout started. Link visits are not confirmed notification opens, and repeat visits are counted.</p>
+    <p style="font-size:13px;color:#6B7280">Website payments come from Stripe; Apple payments come from verified production RevenueCat events. GBP amounts are gross before fees and tax deductions. Stripe totals are before refunds; Apple refunds are shown separately. Website dates use checkout creation; Apple dates use purchase time. Link visits are not confirmed notification opens, and repeat visits are counted.</p>
     <div id="donationsList" aria-live="polite"></div></div></div>
   </div>
 
@@ -1138,7 +1138,7 @@ async function loadDonations() {
   const sequence=++donationReportRequest;
   const el=document.getElementById('donationsList');
   const count=document.getElementById('donationCount');
-  el.textContent='Loading verified Stripe payments…'; count.textContent='';
+  el.textContent='Loading verified website and Apple payments…'; count.textContent='';
   const period=document.getElementById('donationPeriod').value;
   const to=new Date(), from=period==='appeal'?new Date('2026-10-30T20:00:00Z'):new Date(to.getTime()-Number(period)*3600000);
   if(from>=to){el.textContent='The appeal period starts at 8 pm UK time on 30 October. Choose another period to see existing activity.';return;}
@@ -1152,9 +1152,14 @@ async function loadDonations() {
     const labels={support_link_visit:'Support link visits',support_page_view:'Support page views (signed in)',become_a_founder:'Founder button clicks'};
     el.innerHTML=(d.complete?'':'<p style="color:#B45309">Partial report: more than 2,000 checkout sessions match this period. Choose a shorter period; payment totals below are incomplete.</p>')+
       '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:12px">'+
-      metric('Gross received',money(d.grossPence))+metric('Contributions',money(d.contributionPence))+metric('Founder purchases',money(d.founderPence))+metric('Payments',d.paidCount)+metric('Donors',d.donorCount)+metric('Checkouts started',d.checkoutCount)+metric('Still open',d.openCount)+metric('Expired without payment',d.expiredCount)+metric('Checkout completion',d.checkoutCount?Math.round(100*d.paidCount/d.checkoutCount)+'%':'—')+'</div>'+
+      metric('Combined recorded gross',d.apple?.available?money(d.combinedGrossPence):'Unavailable')+metric('Website gross',money(d.grossPence))+metric('Website contributions',money(d.contributionPence))+metric('Website Founder',money(d.founderPence))+metric('Website payments',d.paidCount)+metric('Website donors',d.donorCount)+metric('Checkouts started',d.checkoutCount)+metric('Still open',d.openCount)+metric('Expired without payment',d.expiredCount)+metric('Checkout completion',d.checkoutCount?Math.round(100*d.paidCount/d.checkoutCount)+'%':'—')+'</div>'+
       '<h3 style="margin-top:24px">Confirmed website payments</h3><p>Time shown is checkout start time. A completed payment is verified by Stripe, not by a button click.</p><div class="table-wrap"><table><thead><tr><th>Collector</th><th>Type</th><th>Amount</th><th>Checkout started (UK)</th></tr></thead><tbody>'+
       (d.payments.map(p=>`<tr><td><strong>${e(p.name||'Unknown collector')}</strong><div>${e(p.email||'')}</div></td><td>${e(p.type)}</td><td>${money(p.amount)}</td><td>${when(p.createdAt)}</td></tr>`).join('')||'<tr><td colspan="4">No confirmed payments for these checkouts.</td></tr>')+'</tbody></table></div>'+
+      (d.apple?.available?'<h3 style="margin-top:24px">Apple in-app payments</h3><p>Recording enabled '+when(d.apple.trackingSince)+'. Earlier purchases may be missing until RevenueCat events are recovered. Combined totals include recorded GBP payments only, not a complete Apple sales or payout statement.</p>'+
+      '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:12px">'+metric('Apple gross',money(d.apple.grossPence))+metric('Apple contributions',money(d.apple.contributionPence))+metric('Apple Founder',money(d.apple.founderPence))+metric('Apple refunds',money(d.apple.refundPence))+metric('Apple after refunds',money(d.apple.retainedPence))+metric('Apple payments',d.apple.paidCount)+'</div>'+
+      (d.apple.excludedTransactions?'<p>'+e(String(d.apple.excludedTransactions))+' Apple transactions excluded from GBP totals (other currency, unknown price or missing purchase event).</p>':'')+
+      '<div class="table-wrap"><table><thead><tr><th>Collector</th><th>Type</th><th>Gross amount</th><th>Purchased (UK)</th><th>Status</th></tr></thead><tbody>'+
+      (d.apple.payments.map(p=>`<tr><td>${e(p.name||'Unlinked Apple customer')}<div>${e(p.email||'')}</div></td><td>${e(p.type)}</td><td>${money(p.amount)}</td><td>${when(p.createdAt)}</td><td>${p.refunded?'Refunded':'Paid'}</td></tr>`).join('')||'<tr><td colspan="5">No recorded GBP Apple purchases in this period. Earlier history may be incomplete.</td></tr>')+'</tbody></table></div>':'<p>Apple payment records unavailable. Combined total is not shown.</p>')+
       '<h3 style="margin-top:24px">Interest & link visits</h3><p>Tracking starts when this release goes live. Anonymous visitors cannot be identified; signed-in activity shows the collector. Counts across rows must not be added to calculate unique people.</p><div class="table-wrap"><table><thead><tr><th>Activity</th><th>Events</th><th>Identified collectors</th></tr></thead><tbody>'+
       (d.activity.map(a=>`<tr><td>${e(labels[a.location]||a.location)}</td><td>${a.events}</td><td>${a.identified_users}</td></tr>`).join('')||'<tr><td colspan="3">No recorded activity in this period.</td></tr>')+'</tbody></table></div>'+
       '<h3 style="margin-top:24px">Recent activity (latest 200)</h3><div class="table-wrap"><table><thead><tr><th>Collector</th><th>Activity</th><th>Time (UK)</th></tr></thead><tbody>'+

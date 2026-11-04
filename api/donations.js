@@ -77,7 +77,10 @@ router.get('/report', requireAdmin, async (req, res) => {
       FROM donation_clicks WHERE clicked_at >= $1 AND clicked_at < $2 GROUP BY location ORDER BY events DESC`,params);
     const recent=await pool.query(`SELECT user_name,user_email,location,clicked_at FROM donation_clicks
       WHERE clicked_at >= $1 AND clicked_at < $2 ORDER BY clicked_at DESC LIMIT 200`,params);
-    res.json({...summary,complete,from:period.from,to:period.to,activity:clicks.rows,recentActivity:recent.rows});
+    let apple;
+    try {apple={available:true,...await require('./apple_support').report(pool,period)};}
+    catch {apple={available:false,error:'Apple payment records are temporarily unavailable.'};}
+    res.json({...summary,apple,combinedGrossPence:apple.available?summary.grossPence+apple.grossPence:null,complete,from:period.from,to:period.to,activity:clicks.rows,recentActivity:recent.rows});
   } catch(error) {
     console.error('Donation report unavailable:',error.type || error.code || 'unknown');
     res.status(502).json({error:'Donation report unavailable. No totals are shown because the payment data could not be verified.'});
