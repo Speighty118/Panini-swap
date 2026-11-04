@@ -24,6 +24,18 @@ function requireAdmin(req, res, next) {
 
 router.use(requireAdmin);
 
+router.get('/support-appeal/preview', async (req,res) => {
+ res.set('Cache-Control','no-store');
+ try {res.json(await require('./support_appeal').preview(pool,process.env.ADMIN_SECRET));}
+ catch(e) {res.status(400).json({error:e.message});}
+});
+router.post('/support-appeal/send', async (req,res) => {
+ res.set('Cache-Control','no-store');
+ try {res.json(await require('./support_appeal').sendBatch(pool,process.env.ADMIN_SECRET,req.body.token,require('./push').sendPushNotification));}
+ catch(e) {console.error('Support appeal batch failed',e.message);res.status(400).json({error:'Batch not confirmed. Preview again to safely resume; already delivered messages will be skipped.'});}
+});
+
+
 router.get('/collection-sharing-referrals', async (req, res) => {
   res.set('Cache-Control', 'no-store');
   try {

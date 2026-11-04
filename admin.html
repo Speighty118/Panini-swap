@@ -475,6 +475,13 @@
       </div>
     </div>
 
+    <div class="card" style="padding:20px">
+      <h2>Community support appeal — 11 November</h2>
+      <p>One inbox message per eligible member, including unverified members. Excludes suspended/test accounts, the support account and members blocking support. Push notifications are best effort; no emails are sent.</p>
+      <button class="btn-primary" onclick="previewSupportAppeal()">Preview recipients &amp; message</button>
+      <p id="supportAppealStatus" role="status"></p>
+      <div id="supportAppealPreview"></div>
+    </div>
     <div class="card">
       <div class="card-header"><h2>✉️ Send message to user</h2></div>
       <div style="padding:16px;display:flex;flex-direction:column;gap:10px">
@@ -2710,3 +2717,31 @@ if (adminSecret) {
 </script>
 </body>
 </html>
+
+<script>
+let supportAppealPreview=null, supportAppealSending=false;
+async function previewSupportAppeal(){
+ if(supportAppealSending)return;
+ const status=document.getElementById('supportAppealStatus');status.textContent='Loading preview…';
+ try{supportAppealPreview=await adminFetch('/admin/support-appeal/preview');const p=supportAppealPreview;
+ status.textContent=`${p.total} eligible members · ${p.sent} already sent · ${p.total-p.sent} remaining`;
+ const box=document.getElementById('supportAppealPreview');box.replaceChildren();
+ const from=document.createElement('p');from.textContent='From: '+p.sender;box.append(from);
+ const body=document.createElement('pre');body.style.cssText='white-space:pre-wrap;font:inherit;line-height:1.6';body.textContent=p.body;box.append(body);
+ const details=document.createElement('details'),summary=document.createElement('summary');summary.textContent='Review recipient names';details.append(summary);
+ const names=document.createElement('p');names.textContent=p.recipients.map(r=>r.name+(r.sent?' (sent)':'')).join(', ');details.append(names);box.append(details);
+ const send=document.createElement('button');send.className='btn-primary';send.textContent='Send appeal to remaining members';send.disabled=p.sent===p.total;send.onclick=sendSupportAppeal;box.append(send);
+ }catch(e){status.textContent=e.message;}
+}
+async function sendSupportAppeal(){
+ if(supportAppealSending||!supportAppealPreview)return;
+ const p=supportAppealPreview;if(!confirm(`Send this exact appeal from ${p.sender} to ${p.total-p.sent} remaining members? This also attempts a push notification.`))return;
+ supportAppealSending=true;const status=document.getElementById('supportAppealStatus');let sent=p.sent;
+ document.querySelectorAll('#supportAppealPreview button').forEach(b=>b.disabled=true);
+ try{for(;;){status.textContent=`Sending in batches… ${sent} delivered or previously sent of ${p.total}. Keep this page open.`;
+ const result=await adminFetch('/admin/support-appeal/send',{method:'POST',body:JSON.stringify({token:p.token})});sent+=result.sent;if(result.done)break;}
+ status.textContent=`Finished. ${sent} inbox messages delivered or previously sent. Accounts that became ineligible were skipped. Push delivery is not guaranteed.`;
+ }catch(e){status.textContent='Stopped: '+e.message+' Preview again to resume safely.';}
+ finally{supportAppealSending=false;}
+}
+</script>
