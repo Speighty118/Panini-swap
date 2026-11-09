@@ -24,6 +24,42 @@ function requireAdmin(req, res, next) {
 
 router.use(requireAdmin);
 
+const appeal = require('./support_appeal');
+const cutoff = Date.parse('2026-11-12T00:00:00Z');
+async function ensureSchedule() {
+  await pool.query('CREATE TABLE IF NOT EXISTS community_appeal_schedule (campaign text PRIMARY KEY, due_at timestamptz NOT NULL, finished boolean NOT NULL DEFAULT false)');
+}
+router.put('/support-appeal/schedule', async (req,res) => {
+  const due = Date.parse(req.body.due);
+  if (!(due > Date.now() && due < cutoff)) return res.status(400).json({error:'Choose a future time before the appeal ends.'});
+  try {
+    await ensureSchedule();
+    const result = await pool.query('INSERT INTO community_appeal_schedule(campaign,due_at) VALUES ($1,$2) ON CONFLICT(campaign) DO UPDATE SET due_at=excluded.due_at WHERE community_appeal_schedule.due_at > now() AND NOT community_appeal_schedule.finished RETURNING due_at',[appeal.KEY,new Date(due)]);
+    if (!result.rowCount) return res.status(409).json({error:'Delivery has already started.'});
+    res.json(result.rows[0]);
+  } catch {res.status(500).json({error:'Could not save schedule.'});}
+});
+let working = false;
+async function deliverScheduledAppeal() {
+  if (working || Date.now() >= cutoff) return;
+  working = true;
+  try {
+    await ensureSchedule();
+    const {rowCount} = await pool.query('SELECT 1 FROM community_appeal_schedule WHERE campaign=$1 AND due_at<=now() AND NOT finished',[appeal.KEY]);
+    if (!rowCount) return;
+    const {token} = await appeal.preview(pool,process.env.ADMIN_SECRET);
+    while (Date.now()<cutoff) {
+      const batch = await appeal.sendBatch(pool,process.env.ADMIN_SECRET,token,require('./push').sendPushNotification);
+      if (batch.done) {
+        await pool.query('UPDATE community_appeal_schedule SET finished=true WHERE campaign=$1',[appeal.KEY]);
+        break;
+      }
+    }
+  } catch {console.error('Scheduled appeal pending; will retry.');}
+  finally {working=false;}
+}
+setInterval(deliverScheduledAppeal,30000).unref();
+
 router.get('/support-appeal/preview', async (req,res) => {
  res.set('Cache-Control','no-store');
  try {res.json(await require('./support_appeal').preview(pool,process.env.ADMIN_SECRET));}

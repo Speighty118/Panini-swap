@@ -1,30 +1,25 @@
 const crypto = require('node:crypto');
 const SENDER = 121;
-const KEY = 'support-2026-11-11';
+const KEY = 'winter-update-2026-11-09';
 const DEADLINE = Date.parse('2026-11-12T00:00:00Z');
-const BODY = `Hi, it’s Tom, the person behind Got One Spare? 👋
+const BODY = `Hi everyone, it’s Tom from Got One Spare? 👋
 
-I’m reaching out to our members because I need your help keeping the app and website running.
+More than 500 of you have joined Got One Spare? Together you’ve started over 5,400 swaps, and 768 are marked as completed. If you’ve ever opened an envelope and found the sticker you needed for that stubborn gap in your album, that’s exactly why I built this. Thank you for being part of it.
 
-We’ve grown to over 500 members, with 5,400 swaps started through Got One Spare? It means a lot to see something I’ve built helping collectors find each other and fill those gaps in their albums.
+I said I’d let you know how the appeal was going. So far, we’ve raised £10 towards our £150 goal. A heartfelt thank you to the collectors who chipped in. We have until the end of Wednesday 11 November, UK time. If we reach £150 by then, swapping will stay open. If we fall short, I’ll need to pause Got One Spare? between collections.
 
-But keeping it running costs money, and I’m struggling to keep covering those costs myself.
+If we do pause, we’ll close new swap proposals first. If you’ve already agreed a swap or put stickers in the post, you’ll still be able to message your partner, mark stickers as posted or received, and report a problem. I’ll send the exact dates and give everyone at least two weeks from that notice to finish up.
 
-Our goal is to raise £150 by 11 November. That’s 50 members giving £3. Without enough ongoing support, I’ll have to close the app and website—and I’d really love to keep this community going.
+We plan to be back for the men’s Euros in 2028. We’ll keep your account and your collection lists so you can sign back in with the same details when we reopen. During the break, you’ll be able to check gotonespare.com for news.
 
-Even if you’ve finished your collection or aren’t using Got One Spare? right now, I hope you’ll think of us for the next one. I want to keep adding support for future sticker and card collections, so we’re here whenever you’re ready to swap again.
+If you’d like to help, you can make a one-off contribution of £3, £5 or £10. Donations received by the deadline count towards keeping swapping open. If we do pause, you’ll still be able to donate towards developing Got One Spare? for future collections.
 
-If you can comfortably spare £3, £5 or £10, a one-off contribution would help.
+On iPhone, open More → Support Got One Spare?
+On the website, tap https://www.gotonespare.com/?support=1
 
-📱 Using the iPhone app? Update to the latest version, then open More → Support Got One Spare? to contribute directly through the app.
+Please only give if it’s comfortable for you. Whether you donated, helped someone finish a page, or trusted a stranger enough to put an envelope in the post, thank you.
 
-🌐 Prefer the website? You can contribute here:
-https://www.gotonespare.com/?support=1
-
-Please don’t stretch yourself if money is tight—you’re still very welcome here. And if you’ve already contributed, thank you. I really appreciate it.
-
-Thanks for being part of Got One Spare? 💛
-Tom`;
+Tom 💛`;
 const ELIGIBLE = `u.id <> ${SENDER} AND COALESCE(u.is_suspended,FALSE) = FALSE
  AND u.email IS NOT NULL AND u.email !~* '^gotonespare@'
  AND COALESCE(u.name,'') !~* '(appletest|testaccount|testpartner|^test\\y)'
@@ -64,13 +59,13 @@ async function sendBatch(pool,secret,token,push) {
     await client.query('INSERT INTO conversation_participants (conversation_id,user_id) VALUES ($1,$2),($1,$3)',[conversation,SENDER,user.id]);
    }
    await client.query('INSERT INTO direct_messages (conversation_id,sender_id,body) VALUES ($1,$2,$3)',[conversation,SENDER,BODY]);
-   await client.query(`INSERT INTO notifications (user_id,type,title,body) VALUES ($1,'direct_message','A message from Tom at Got One Spare?',$2)`,[user.id,'Help keep Got One Spare? running. Please read the message in your inbox.']);
+   await client.query(`INSERT INTO notifications (user_id,type,title,body) VALUES ($1,'direct_message','An update from Tom about winter swapping 💛',$2)`,[user.id,'We’ve raised £10 towards our £150 goal. Please open your inbox for what happens after 11 November and how to finish any swaps already under way.']);
    delivered.push(user.id);
   }
   await client.query('COMMIT');
  } catch(error) {await client.query('ROLLBACK');throw error;} finally {client.release();}
  // Inbox delivery is the durable record. Push is best effort and never retried on resume.
- await Promise.allSettled(delivered.map(id=>Promise.resolve().then(()=>push(id,{title:'💬 A message from Tom at Got One Spare?',body:'Help keep Got One Spare? running. Please read the message in your inbox.'}))));
+ await Promise.allSettled(delivered.map(id=>Promise.resolve().then(()=>push(id,{title:'💬 An update from Tom about winter swapping 💛',body:'We’ve raised £10 towards our £150 goal. Please open your inbox for what happens after 11 November and how to finish any swaps already under way.'}))));
  return {sent:delivered.length,done:delivered.length===0};
 }
 module.exports={BODY,KEY,encode,decode,preview,sendBatch};

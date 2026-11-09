@@ -2747,6 +2747,9 @@ async function previewSupportAppeal(){
  const body=document.createElement('pre');body.style.cssText='white-space:pre-wrap;font:inherit;line-height:1.6';body.textContent=p.body;box.append(body);
  const details=document.createElement('details'),summary=document.createElement('summary');summary.textContent='Review recipient names';details.append(summary);
  const names=document.createElement('p');names.textContent=p.recipients.map(r=>r.name+(r.sent?' (sent)':'')).join(', ');details.append(names);box.append(details);
+ const when=document.createElement('input');when.type='datetime-local';when.setAttribute('aria-label','Send time in your local time zone');box.append(when);
+ const schedule=document.createElement('button');schedule.textContent='Schedule inbox message and notification (local time)';box.append(schedule);
+ schedule.onclick=async()=>{try{const due=new Date(when.value).toISOString();const saved=await adminFetch('/admin/support-appeal/schedule',{method:'PUT',body:JSON.stringify({due})});status.textContent='Scheduled for '+new Date(saved.due_at).toLocaleString();}catch(e){status.textContent=e.message;}};
  const send=document.createElement('button');send.className='btn-primary';send.textContent='Send appeal to remaining members';send.disabled=p.sent===p.total;send.onclick=sendSupportAppeal;box.append(send);
  }catch(e){status.textContent=e.message;}
 }
